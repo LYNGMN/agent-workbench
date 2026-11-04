@@ -1,0 +1,61 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="stylesheet" href="shared.css">
+<style>
+  .head { display:flex; align-items:flex-start; justify-content:space-between; }
+  .x { width:44px; height:52px; display:inline-flex; align-items:center; justify-content:center; padding:0 0 0 8px; border:0; background:var(--surface); color:var(--icon); }
+  .ghost { color:#2a2d33; }                         /* disappears on dark */
+  .faint { color:#9aa0a6; font-size:13px; }          /* low contrast on light */
+  .row { display:flex; flex-wrap:wrap; gap:8px; }
+  .row button { height:44px; padding:0 12px; border:1px solid var(--border); background:var(--surface); color:var(--text); }
+  .narrow { width:110px; }
+  .narrow button { width:100%; min-height:44px; }
+  .desc { width:150px; word-break:break-all; color:var(--muted); }
+  .box { height:120px; overflow:auto; border:1px solid var(--border); }
+  .menu-host { display:flex; justify-content:flex-end; position:relative; }
+  .menu { position:absolute; top:48px; left:calc(100% - 44px); width:220px; background:var(--surface); border:1px solid var(--border); }
+  .menu[hidden] { display:none; }
+  .menu button { display:block; width:100%; height:44px; border:0; background:none; color:var(--text); text-align:left; padding:0 12px; }
+  .clip { height:30px; overflow:hidden; }
+  .clip button { height:44px; }
+  .tool { display:flex; gap:8px; }
+  .tool button { width:44px; height:44px; display:inline-flex; align-items:center; justify-content:center; border:0; background:var(--surface); color:var(--icon); }
+  .thin { stroke-width:1.25 !important; }
+  .filled { fill:currentColor !important; }
+  .bar { position:fixed; left:0; right:0; bottom:0; height:56px; display:flex; justify-content:space-around; align-items:center; background:var(--surface); }
+  .bar button { width:44px; height:44px; border:0; background:none; color:var(--icon); display:inline-flex; align-items:center; justify-content:center; }
+  .x:focus { outline:none; }
+  .ov { display:flex; gap:0; }
+  .ov button { height:44px; padding:0 12px; }
+  .ov button + button { margin-left:-6px; }
+  .card { cursor:pointer; padding:12px; background:var(--surface); }
+</style></head>
+<body>
+<div class="head"><h1>영상 설정</h1>
+  <button class="x" aria-label="닫기"><svg class="lucide lucide-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+
+<section><p class="faint">작은 설명 문구</p>
+  <button class="x ghost"><svg class="lucide lucide-more-horizontal" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></button></section>
+
+<section class="narrow"><button>설정을 모두 저장합니다</button></section>
+<section><p class="desc">구독한 채널의 새 영상을 자동으로 보관합니다</p></section>
+
+<section class="row"><button>전체</button><button>오늘 올라온 영상</button><button>보관함</button><button>읽음 처리된 항목</button><button>폴더</button></section>
+
+<section class="tool">
+  <button aria-label="보관"><svg class="lucide" viewBox="0 0 24 24"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg></button>
+  <button aria-label="복사"><svg class="lucide thin" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg></button>
+  <button aria-label="공유"><svg class="lucide filled" viewBox="0 0 24 24"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" x2="12" y1="2" y2="15"/></svg></button>
+  <button>✕</button>
+  <button aria-label="닫기"><svg class="lucide lucide-circle-x" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg></button>
+</section>
+
+<section class="menu-host"><button class="x" id="more" aria-label="더보기" onclick="m.hidden=!m.hidden"><svg class="lucide" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></button>
+  <div class="menu" id="m" role="menu" hidden><button role="menuitem">이름 바꾸기</button><button role="menuitem">삭제</button></div></section>
+
+<section class="ov"><button>이전</button><button>다음</button></section>
+<section class="clip"><button>잘리는 버튼</button></section>
+<section class="box"><p>긴 목록</p><p>1</p><p>2</p><p>3</p><p>4</p><p>5</p><p>6</p></section>
+<section><div class="card" onclick="void 0" data-gesture="longpress">길게 눌러 메뉴 열기</div></section>
+<nav class="bar"><button aria-label="홈"><svg class="lucide" viewBox="0 0 24 24"><path d="M3 10 12 3l9 7v11H3z"/></svg></button><button aria-label="설정"><svg class="lucide" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/></svg></button></nav>
+</body></html>

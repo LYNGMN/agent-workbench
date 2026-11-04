@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>스킬 목록</title>
+<style>
+:root {
+  --bg: #f7f6f3; --surface: #ffffff; --surface-2: #f1efea; --line: #dedad2; --line-strong: #c9c4b9;
+  --text: #1d1b18; --muted: #615c53; --faint: #7c766c;
+  --accent: #2f5bd3;
+  --human: #8a4b08; --human-bg: #fbefdf;
+  --model: #23603f; --model-bg: #e3f2ea;
+  --both: #2a52bf; --both-bg: #e6ecfb;
+  --off: #6f6a61; --off-bg: #eeece7; --field-line: #8c867b;
+  --focus: #2f5bd3;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141412; --surface: #1c1b19; --surface-2: #252421; --line: #34322e; --line-strong: #4f4b44;
+    --text: #ecebe7; --muted: #b0aba1; --faint: #9a958b;
+    --accent: #8fb0ff;
+    --human: #f2b56b; --human-bg: #3a2a16;
+    --model: #7fd1a6; --model-bg: #183126;
+    --both: #9db9ff; --both-bg: #1f2a45;
+    --off: #a7a298; --off-bg: #2a2926; --field-line: #7a756c;
+    --focus: #8fb0ff;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141412; --surface: #1c1b19; --surface-2: #252421; --line: #34322e; --line-strong: #4f4b44;
+  --text: #ecebe7; --muted: #b0aba1; --faint: #9a958b;
+  --accent: #8fb0ff;
+  --human: #f2b56b; --human-bg: #3a2a16;
+  --model: #7fd1a6; --model-bg: #183126;
+  --both: #9db9ff; --both-bg: #1f2a45;
+  --off: #a7a298; --off-bg: #2a2926; --field-line: #7a756c;
+  --focus: #8fb0ff;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scrollbar-color: var(--line-strong) transparent; scrollbar-width: thin; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", "Noto Sans KR", system-ui, sans-serif;
+  word-break: keep-all; overflow-wrap: break-word;
+}
+p, .ds { text-wrap: pretty; }
+code { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 32px 24px 64px; }
+header h1 { font-size: 28px; line-height: 1.3; margin: 0 0 6px; letter-spacing: -0.01em; }
+.meta { color: var(--muted); font-size: 13px; margin: 0; }
+.lede { margin: 16px 0 0; max-width: 70ch; color: var(--muted); }
+.lede code { color: var(--text); background: var(--surface-2); padding: 1px 5px; border-radius: 4px; font-size: 13px; }
+
+.tools { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 24px 0 0; padding: 0; list-style: none; }
+.tools li { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+.tools .n { font-size: 26px; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.tools .l { color: var(--muted); font-size: 13px; white-space: nowrap; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 20px 0 0; padding: 0; list-style: none; font-size: 13px; color: var(--muted); }
+.legend li { display: flex; align-items: center; gap: 8px; }
+
+.controls { position: sticky; top: 0; z-index: 2; background: var(--bg); margin: 24px -24px 0; padding: 12px 24px; border-bottom: 1px solid var(--line); display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field label { font-size: 12px; font-weight: 600; color: var(--muted); }
+input[type="search"], select {
+  font: inherit; font-size: 16px; color: var(--text); background-color: var(--surface);
+  border: 1px solid var(--field-line); border-radius: 8px; min-height: 44px; padding: 0 14px;
+}
+input[type="search"] { width: 360px; max-width: 100%; }
+select {
+  appearance: none; -webkit-appearance: none; padding-right: 44px; min-width: 230px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 14px center; background-size: 16px;
+}
+input:focus-visible, select:focus-visible, a:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.count { margin: 0 0 0 auto; color: var(--muted); font-size: 13px; white-space: nowrap; align-self: center; }
+
+.jump { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 0; padding: 0; list-style: none; }
+.jump a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--text); text-decoration: none; font-size: 13px; white-space: nowrap; }
+.jump a:hover { border-color: var(--accent); }
+
+section.group { margin-top: 40px; scroll-margin-top: 100px; }
+section.group > h2 { font-size: 20px; line-height: 1.4; margin: 0; display: flex; align-items: baseline; gap: 10px; }
+section.group > h2 .c { font-size: 13px; color: var(--muted); font-weight: 500; }
+section.group > p { margin: 6px 0 16px; color: var(--muted); max-width: 80ch; font-size: 14px; }
+
+table { width: 100%; border-collapse: separate; border-spacing: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; table-layout: fixed; }
+th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+tbody tr:last-child td { border-bottom: 0; }
+thead th { background: var(--surface-2); font-size: 12px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+th.skill, td.skill { width: 28%; }
+td.skill .nm { font-weight: 600; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 14px; overflow-wrap: anywhere; }
+td.skill .ds { color: var(--muted); font-size: 13px; margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.names { display: flex; flex-direction: column; gap: 6px; }
+.nm-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.nm-row code { font-size: 13px; overflow-wrap: anywhere; }
+.nm-row.off code { color: var(--off); text-decoration: line-through; }
+.none { color: var(--faint); }
+.badge { display: inline-flex; align-items: center; justify-content: center; height: 20px; padding: 0 7px; border-radius: 5px; font-size: 11px; font-weight: 600; white-space: nowrap; line-height: 1; }
+.badge.human { color: var(--human); background: var(--human-bg); }
+.badge.model { color: var(--model); background: var(--model-bg); }
+.badge.both { color: var(--both); background: var(--both-bg); }
+.badge.off { color: var(--off); background: var(--off-bg); }
+.badge.hint { color: var(--muted); background: transparent; box-shadow: inset 0 0 0 1px var(--line-strong); }
+.tl { display: none; }
+.empty { padding: 40px 0; text-align: center; color: var(--muted); }
+footer { margin-top: 48px; color: var(--muted); font-size: 13px; }
+footer code { background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+
+@media (max-width: 860px) {
+  .tools { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .wrap { padding: 24px 16px 48px; }
+  .controls { position: static; margin: 20px 0 0; padding: 12px 0; }
+  .field { width: 100%; }
+  input[type="search"], select { width: 100%; min-width: 0; }
+  .count { margin-left: 0; }
+  table, thead, tbody, tr, td { display: block; width: 100%; }
+  table { border: 0; background: transparent; border-radius: 0; overflow: visible; }
+  thead { display: none; }
+  tbody tr { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 12px; padding: 6px 0; }
+  td { border-bottom: 0; padding: 6px 14px; }
+  th.skill, td.skill { width: 100%; }
+  td.tool { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 12px; }
+  .tl { display: block; white-space: nowrap; font-size: 12px; font-weight: 600; color: var(--muted); padding-top: 1px; }
+}
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>스킬 목록</h1>
+    <p class="meta" id="generated"></p>
+    <p class="lede">네 도구에 실제로 설치된 스킬을 한 줄씩 모았습니다. 같은 원본을 쓰는 스킬은 도구가 달라도 같은 줄에 있습니다.
+      묶음 스킬은 사람이 부를 때 <code>&lt;묶음&gt;-&lt;이름&gt;</code>입니다(예: <code>/gstack-browse</code>). 코덱스 플러그인 스킬은 <code>&lt;플러그인&gt;:&lt;이름&gt;</code>으로 보입니다.</p>
+  </header>
+
+  <ul class="tools" id="tools" aria-label="도구별 쓸 수 있는 스킬 수"></ul>
+  <ul class="legend" aria-label="표시 뜻">
+    <li><span class="badge both">둘 다</span>사람이 부르고 모델도 스스로 씀</li>
+    <li><span class="badge human">사람만</span>사람이 이름으로 불러야 실행</li>
+    <li><span class="badge model">모델만</span>메뉴에는 없고 모델만 씀</li>
+    <li><span class="badge off">꺼짐</span>설치돼 있지만 숨김</li>
+    <li><span class="badge hint">힌트</span>입력창에 세부 명령 안내가 뜸</li>
+  </ul>
+
+  <div class="controls" role="search">
+    <div class="field">
+      <label for="q">스킬 찾기</label>
+      <input id="q" type="search" placeholder="이름이나 설명 일부" autocomplete="off">
+    </div>
+    <div class="field">
+      <label for="tool">도구</label>
+      <select id="tool"><option value="">모든 도구</option></select>
+    </div>
+    <p class="count" id="count" aria-live="polite"></p>
+  </div>
+  <ul class="jump" id="jump" aria-label="묶음으로 건너뛰기"></ul>
+
+  <main id="list"></main>
+  <footer>
+    <p>이 문서는 <code>~/.agents/bin/skill-inventory</code>가 설치 상태를 읽어 만듭니다. 스킬을 설치하거나 지운 뒤 다시 돌리면 갱신됩니다.</p>
+  </footer>
+</div>
+<script>const DATA=/*DATA*/null;</script>
+<script>
+(() => {
+  const BLURB = {
+    gstack: 'Garry Tan의 gstack. 브라우저 확인·QA·리뷰·배포·보안 점검처럼 실행하며 검증하는 스킬입니다.',
+    superpowers: 'obra의 Superpowers. 브레인스토밍·계획·디버깅·TDD·완료 전 검증 같은 개발 절차 스킬입니다.',
+    pstack: 'Poteto가 Cursor 플러그인으로 만든 pstack(backnotprop/pstack 미러). 일하는 원칙과 작업 방식 스킬이며 딥시크 하네스에만 연결됩니다.',
+    cloudflare: 'Cloudflare 공식 스킬. Workers·D1·Durable Objects·Wrangler 등 제품별 스킬입니다.',
+        'taste-skill': '디자인 취향·브랜드 키트 스킬 묶음입니다.',
+    trailofbits: 'Trail of Bits 보안 검토 스킬입니다.',
+    superloopy: 'superloopy 플러그인 스킬입니다.',
+    pinescript: 'TradingView Pine Script 플러그인 스킬입니다.',
+    '그 밖의 스킬': '묶음에 속하지 않은 개별 스킬과 직접 만든 스킬입니다.',
+  };
+  const ROLE = { both: '둘 다', human: '사람만', model: '모델만', off: '꺼짐' };
+  const $ = (s) => document.querySelector(s);
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const slug = (g) => 'g-' + Array.from(g).map((c) => c.codePointAt(0).toString(16)).join('');
+
+  $('#generated').textContent = `기준 시각 ${DATA.generated} · 스킬 ${DATA.rows.length}개` + (DATA.codexOk ? '' : ' · 코덱스 목록을 읽지 못했습니다');
+  $('#tools').innerHTML = DATA.tools.map((t) => `<li><div class="n">${t.count}</div><div class="l">${esc(t.label)}</div></li>`).join('');
+  $('#tool').insertAdjacentHTML('beforeend', DATA.tools.map((t) => `<option value="${t.id}">${esc(t.label)}</option>`).join(''));
+
+  const order = { human: 0, both: 1, model: 2, off: 3 };
+  const cell = (entries) => {
+    if (!entries || entries.length === 0) return '<span class="none">없음</span>';
+    return '<div class="names">' + [...entries].sort((a, b) => order[a.role] - order[b.role]).map((e) =>
+      `<div class="nm-row ${e.role === 'off' ? 'off' : ''}"><code>${esc(e.name)}</code><span class="badge ${e.role}">${ROLE[e.role]}</span>${e.hint ? '<span class="badge hint">힌트</span>' : ''}</div>`
+    ).join('') + '</div>';
+  };
+
+  function render() {
+    const q = $('#q').value.trim().toLowerCase();
+    const tool = $('#tool').value;
+    const rows = DATA.rows.filter((r) => {
+      if (tool && !(r.tools[tool] || []).some((e) => e.role !== 'off')) return false;
+      if (!q) return true;
+      const names = Object.values(r.tools).flat().map((e) => e.name).join(' ');
+      return (r.name + ' ' + names + ' ' + r.desc).toLowerCase().includes(q);
+    });
+    const groups = DATA.groups.filter((g) => rows.some((r) => r.group === g));
+    $('#count').textContent = `${rows.length}개 보임`;
+    $('#jump').innerHTML = groups.map((g) => `<li><a href="#${slug(g)}">${esc(g)} ${rows.filter((r) => r.group === g).length}</a></li>`).join('');
+    if (rows.length === 0) {
+      $('#list').innerHTML = '<p class="empty">맞는 스킬이 없습니다. 검색어를 줄이거나 도구를 “모든 도구”로 바꿔 보세요.</p>';
+      return;
+    }
+    const head = '<thead><tr><th class="skill" scope="col">스킬</th>' + DATA.tools.map((t) => `<th scope="col">${esc(t.label)}</th>`).join('') + '</tr></thead>';
+    $('#list').innerHTML = groups.map((g) => {
+      const gr = rows.filter((r) => r.group === g);
+      const body = gr.map((r) => `<tr><td class="skill"><div class="nm">${esc(r.name)}</div>${r.desc ? `<div class="ds" title="${esc(r.desc)}">${esc(r.desc)}</div>` : ''}</td>` +
+        DATA.tools.map((t) => `<td class="tool"><span class="tl" title="${esc(t.label)}">${esc(t.short)}</span>${cell(r.tools[t.id])}</td>`).join('') + '</tr>').join('');
+      return `<section class="group" id="${slug(g)}" aria-labelledby="${slug(g)}-h"><h2 id="${slug(g)}-h">${esc(g)} <span class="c">${gr.length}개</span></h2>${BLURB[g] ? `<p>${esc(BLURB[g])}</p>` : ''}<table>${head}<tbody>${body}</tbody></table></section>`;
+    }).join('');
+  }
+  $('#q').addEventListener('input', render);
+  $('#tool').addEventListener('change', render);
+  render();
+})();
+</script>
+</body>
+</html>

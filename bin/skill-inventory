@@ -1,0 +1,237 @@
+#!/usr/bin/env python3
+# skill-inventory — 도구별로 실제 설치된 스킬을 읽어 한 장짜리 목록 문서(HTML)를 만든다.
+#
+# 읽는 곳(실제 상태만, 추측하지 않음)
+#   Claude Code·VS Code : ~/.claude/skills + ~/.claude/settings.json skillOverrides
+#   Codex               : `codex debug prompt-input`이 모델에 싣는 스킬 목록(+ agents/openai.yaml의 policy)
+#   Antigravity         : ~/.gemini/config/skills
+#   DeepSeek Harness    : ~/.dsh/skills + ~/.agents/skills 최상위(하네스가 직접 읽음) + @local/skill-hints 명령
+# 같은 원본 SKILL.md를 가리키면 한 줄로 묶는다.
+#
+# 사용법: skill-inventory [출력 경로]   (기본 ~/.agents/skill-inventory.html)
+import datetime
+import html
+import json
+import os
+import re
+import subprocess
+import sys
+
+HOME = os.path.expanduser('~')
+OUT = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HOME, '.agents', 'skill-inventory.html')
+HERE = os.path.dirname(os.path.realpath(__file__))
+NAME_OK = re.compile(r'^[a-z0-9]+(-[a-z0-9]+)*$')
+GROUPS = ['gstack', 'superpowers', 'pstack', 'cloudflare', 'taste-skill', 'trailofbits', 'superloopy', 'pinescript']
+
+
+def read(path, limit=40000):
+    try:
+        with open(path, encoding='utf-8') as f:
+            return f.read(limit)
+    except OSError:
+        return ''
+
+
+def frontmatter(text):
+    if not text.startswith('---'):
+        return {}
+    end = text.find('\n---', 3)
+    if end < 0:
+        return {}
+    lines, out, i = text[3:end].strip('\n').split('\n'), {}, 0
+    while i < len(lines):
+        m = re.match(r'^([A-Za-z][\w-]*):\s*(.*)$', lines[i])
+        i += 1
+        if not m:
+            continue
+        key, value = m.group(1), m.group(2).strip()
+        if value in ('', '|', '>', '|-', '>-', '|+', '>+'):
+            block = []
+            while i < len(lines) and (lines[i][:1] in (' ', '\t') or lines[i] == ''):
+                block.append(lines[i].strip())
+                i += 1
+            value = ' '.join(b for b in block if b)
+        elif len(value) >= 2 and value[0] == value[-1] and value[0] in '"\'':
+            value = value[1:-1].replace('\\"', '"') if value[0] == '"' else value[1:-1]
+        out[key] = value
+    return out
+
+
+def follow(skill_md):
+    """감싸개면 가리키는 실제 SKILL.md로, 아니면 그대로. 실제 경로(realpath)를 돌려준다."""
+    text = read(skill_md, 6000)
+    if 'sync가 만든' in text or '말머리 감싸개' in text or 'dsh-sync-skills' in text:
+        m = re.search(r'`(/[^`\n]+/SKILL\.md)`', text)
+        if m and os.path.exists(m.group(1)):
+            return os.path.realpath(m.group(1))
+    return os.path.realpath(skill_md)
+
+
+def role(meta, override=None):
+    if override == 'off':
+        return 'off'
+    human = meta.get('user-invocable') != 'false'
+    model = meta.get('disable-model-invocation') != 'true' and override != 'user-invocable-only'
+    return 'both' if human and model else 'human' if human else 'model' if model else 'off'
+
+
+skills = {}  # 원본 스킬 이름 → 줄(같은 이름의 복사본·플러그인 사본은 한 줄로 묶는다)
+
+
+def group_of(real):
+    parts = real.split('/')
+    return next((g for g in GROUPS if any(p == g or p.startswith(g + '-') for p in parts)), None)
+
+
+def row(real):
+    meta = frontmatter(read(real))
+    key = meta.get('name') or os.path.basename(os.path.dirname(real))
+    if key in skills:
+        s = skills[key]
+        if s['group'] == '그 밖의 스킬' and group_of(real):
+            s['group'] = group_of(real)
+        if real.replace(HOME, '~') not in s['paths']:
+            s['paths'].append(real.replace(HOME, '~'))
+        return s
+    if True:
+        group = group_of(real)
+        if group is None and '/garrytan/gstack/' in real:
+            group = 'gstack'
+        if group is None and ('/obra/superpowers/' in real or '/.codex/superpowers/' in real):
+            group = 'superpowers'
+        skills[key] = {
+            'name': key,
+            'desc': re.sub(r'\s+', ' ', meta.get('description', '')).strip(),
+            'group': group or '그 밖의 스킬',
+            'paths': [real.replace(HOME, '~')],
+            'tools': {},
+        }
+    return skills[key]
+
+
+def add(tool, real, name, r):
+    entry = row(real)['tools'].setdefault(tool, [])
+    if not any(e['name'] == name for e in entry):
+        entry.append({'name': name, 'role': r})
+
+
+# ---------------------------------------------------------------- Claude Code·VS Code
+def claude():
+    root = os.path.join(HOME, '.claude', 'skills')
+    try:
+        overrides = json.load(open(os.path.join(HOME, '.claude', 'settings.json'))).get('skillOverrides', {})
+    except (OSError, ValueError):
+        overrides = {}
+    for entry in sorted(os.listdir(root)) if os.path.isdir(root) else []:
+        md = os.path.join(root, entry, 'SKILL.md')
+        if not os.path.isfile(md):
+            continue
+        meta = frontmatter(read(md))
+        name = meta.get('name') or entry
+        add('claude', follow(md), name, role(meta, overrides.get(name, overrides.get(entry))))
+    # 켜진 Claude 플러그인의 스킬(이름은 <플러그인>:<스킬>)
+    try:
+        enabled = json.load(open(os.path.join(HOME, '.claude', 'settings.json'))).get('enabledPlugins', {})
+        installed = json.load(open(os.path.join(HOME, '.claude', 'plugins', 'installed_plugins.json'))).get('plugins', {})
+    except (OSError, ValueError):
+        return
+    for plugin, on in enabled.items():
+        info = installed.get(plugin)
+        if not on or not info:
+            continue
+        base = (info[0] if isinstance(info, list) else info).get('installPath', '')
+        skills_dir = os.path.join(base, 'skills')
+        for sub in sorted(os.listdir(skills_dir)) if os.path.isdir(skills_dir) else []:
+            md = os.path.join(skills_dir, sub, 'SKILL.md')
+            if os.path.isfile(md):
+                meta = frontmatter(read(md))
+                add('claude', follow(md), f"{plugin.split('@')[0]}:{meta.get('name') or sub}", role(meta))
+
+
+# ---------------------------------------------------------------- Codex
+def codex():
+    try:
+        out = subprocess.run(['codex', 'debug', 'prompt-input', 'skill inventory'], capture_output=True,
+                             text=True, timeout=180).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    text = out.replace('\\n', '\n')
+    roots = dict(re.findall(r'- `(r\d+)` = `([^`]+)`', text))
+    for name, short in re.findall(r'\n- ([a-z0-9:-]+): .*?\(file: ([^)]+)\)', text):
+        key, _, rest = short.partition('/')
+        path = os.path.join(roots.get(key, ''), rest)
+        if not os.path.isfile(path):
+            continue
+        policy = read(os.path.join(os.path.dirname(path), 'agents', 'openai.yaml'))
+        r = 'human' if re.search(r'allow_implicit_invocation:\s*false', policy) else 'both'
+        add('codex', follow(path), name, r)
+    return True
+
+
+# ---------------------------------------------------------------- Antigravity
+def antigravity():
+    root = os.path.join(HOME, '.gemini', 'config', 'skills')
+    for entry in sorted(os.listdir(root)) if os.path.isdir(root) else []:
+        md = os.path.join(root, entry, 'SKILL.md')
+        if os.path.isfile(md):
+            meta = frontmatter(read(md))
+            add('antigravity', follow(md), meta.get('name') or entry, 'both')
+
+
+# ---------------------------------------------------------------- DeepSeek Harness
+def dsh():
+    seen = set()
+    for root in (os.path.join(HOME, '.dsh', 'skills'), os.path.join(HOME, '.agents', 'skills')):
+        for entry in sorted(os.listdir(root)) if os.path.isdir(root) else []:
+            p = os.path.join(root, entry)
+            md = p if entry.endswith('.md') and os.path.isfile(p) else os.path.join(p, 'SKILL.md')
+            if not os.path.isfile(md):
+                continue
+            meta = frontmatter(read(md))
+            name = meta.get('name', '')
+            if not NAME_OK.match(name) or name in seen:
+                continue
+            seen.add(name)
+            add('dsh', follow(md), name, role(meta))
+    # @local/skill-hints가 같은 이름 명령으로 입력창 힌트를 붙인 스킬
+    hints = next((p for p in (os.path.join(os.path.dirname(HERE), 'dsh-plugins', 'skill-hints', 'index.js'),
+                               os.path.join(HOME, 'Documents', 'deepseek-harness', 'default-workspace', 'plugins', 'skill-hints', 'index.js'))
+                  if os.path.isfile(p)), None)
+    if hints:
+        try:
+            names = subprocess.run(
+                [os.path.join(HOME, '.dsh', 'dsh-runtimes', 'dsh-primary-runtime', 'dependencies', 'node', 'bin', 'node'),
+                 '-e', f'import("{hints}").then(m=>console.log(JSON.stringify(m.discover().map(s=>s.name))))'],
+                capture_output=True, text=True, timeout=30).stdout
+            for s in skills.values():
+                for e in s['tools'].get('dsh', []):
+                    if e['name'] in json.loads(names or '[]'):
+                        e['hint'] = True
+        except (OSError, ValueError, subprocess.TimeoutExpired):
+            pass
+
+
+claude()
+codex_ok = codex()
+antigravity()
+dsh()
+
+SHORT = {'claude': '클로드', 'codex': '코덱스', 'antigravity': '안티그래비티', 'dsh': '딥시크'}
+TOOLS = [('claude', 'Claude Code·VS Code'), ('codex', '코덱스'), ('antigravity', '안티그래비티'), ('dsh', '딥시크 하네스')]
+ORDER = ['gstack', 'superpowers', 'pstack'] + [g for g in GROUPS if g not in ('gstack', 'superpowers', 'pstack')] + ['그 밖의 스킬']
+rows = sorted(skills.values(), key=lambda s: (ORDER.index(s['group']) if s['group'] in ORDER else 99, s['name']))
+counts = {t: sum(1 for s in rows if any(e['role'] != 'off' for e in s['tools'].get(t, []))) for t, _ in TOOLS}
+data = {
+    'generated': datetime.datetime.now().strftime('%Y-%m-%d %H:%M'),
+    'codexOk': codex_ok,
+    'tools': [{'id': t, 'label': l, 'short': SHORT[t], 'count': counts[t]} for t, l in TOOLS],
+    'groups': [g for g in ORDER if any(s['group'] == g for s in rows)],
+    'rows': rows,
+}
+
+TEMPLATE = open(os.path.join(HERE, 'skill-inventory.template.html'), encoding='utf-8').read()
+page = TEMPLATE.replace('/*DATA*/null', json.dumps(data, ensure_ascii=False).replace('</', '<\\/'))
+os.makedirs(os.path.dirname(OUT), exist_ok=True)
+with open(OUT, 'w', encoding='utf-8') as f:
+    f.write(page)
+print(f'{OUT} — 스킬 {len(rows)}개 ' + ', '.join(f'{l} {counts[t]}' for t, l in TOOLS) + ('' if codex_ok else ' (코덱스 목록을 읽지 못함)'))

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Skill Hints",
+    "description": "Shows each skill's argument-hint in the composer.\n스킬의 세부 명령 안내(argument-hint)를 입력창에 보여 줍니다."
+  }
+}

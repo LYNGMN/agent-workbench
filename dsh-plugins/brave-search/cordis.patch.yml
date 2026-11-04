@@ -1,0 +1,16 @@
+# Brave Search provider bundle for DSH.
+# The API key is not stored here: brave-search reads BRAVE_API_KEY from the
+# DSH credential store, the launch environment, or ~/.dsh/brave-api-key.
+- insert:
+    - id: brave-search
+      name: '@local/brave-search'
+      config:
+        apiKeyEnv: BRAVE_API_KEY
+        apiKeyFile: "~/.dsh/brave-api-key"
+        endpoint: https://api.search.brave.com/res/v1/web/search
+        count: 8
+        safeSearch: moderate
+- id: web
+  config:
+    searchProvider: brave
+    fetchProvider: http

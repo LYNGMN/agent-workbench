@@ -1,0 +1,4 @@
+interface:
+  display_name: "Icon SVG Implementation"
+  short_description: "아이콘·SVG 로고 구현 · [아이콘이나 로고를 넣을 곳]"
+  default_prompt: "Use $icon-svg-implementation to choose and implement polished icons for this UI."

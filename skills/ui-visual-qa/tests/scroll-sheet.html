@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="stylesheet" href="shared.css">
+<style>
+  /* A modal bottom sheet (85dvh) whose long form scrolls inside it, scrolled so that one button sits half under the
+     sticky header. Everything is reachable by scrolling the sheet: the audit must report 0 fails (references/scrolling.md). */
+  body { word-break: keep-all; overflow-wrap: break-word; }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+  .sheet { position: fixed; left: 0; right: 0; bottom: 0; max-height: 85dvh; overflow-y: auto; overscroll-behavior: contain;
+    scrollbar-width: thin; scrollbar-color: var(--thumb) transparent; scroll-padding-top: 72px;
+    padding: 0 16px max(50px, calc(16px + env(safe-area-inset-bottom))); background: var(--bg); border-top: 1px solid var(--border); }
+  @media (min-width: 768px) { .sheet { left: 50%; right: auto; width: 480px; margin-left: -240px; bottom: 16px; padding-bottom: 16px; border: 1px solid var(--border); } }
+  .top { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 0; background: var(--bg); }
+  .top h2 { font-size: 18px; margin: 0; }
+  .x { width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0; background: var(--surface); color: var(--icon); flex: none; }
+  .field { display: grid; gap: 4px; margin: 12px 0; }
+  .field label { font-size: 14px; color: var(--muted); }
+  .field input { height: 44px; font-size: 16px; padding: 0 12px; border: 1px solid var(--border); background: var(--bg); color: var(--text); }
+  .pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 12px 0; }
+  .pair button, .go { height: 44px; padding: 0 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); white-space: nowrap; min-width: 0; }
+  .go { width: 100%; margin-top: 12px; }
+</style></head>
+<body>
+<main inert><h1>요약 페이지</h1><p>뒤 화면은 시트가 열린 동안 조작할 수 없습니다.</p></main>
+<section class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+  <div class="top"><h2 id="sheet-title">보낼 곳 추가</h2>
+    <button class="x" aria-label="닫기"><svg class="lucide lucide-x" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+  <div class="field"><label for="f1">이름</label><input id="f1" value="요약 모음"></div>
+  <div class="field"><label for="f2">채팅 번호</label><input id="f2" inputmode="numeric"></div>
+  <div class="pair" id="first-pair"><button>내 채팅</button><button>그룹</button></div>
+  <div class="field"><label for="f3">봇 토큰</label><input id="f3"></div>
+  <div class="field"><label for="f4">메모</label><input id="f4"></div>
+  <div class="pair"><button>연결 확인</button><button>다시 받기</button></div>
+  <div class="field"><label for="f5">보낼 형식</label><input id="f5" value="요약과 링크"></div>
+  <div class="field"><label for="f6">보낼 언어</label><input id="f6" value="한국어"></div>
+  <div class="field"><label for="f7">받는 사람</label><input id="f7"></div>
+  <div class="field"><label for="f8">제목 앞말</label><input id="f8"></div>
+  <div class="field"><label for="f9">끝 인사</label><input id="f9"></div>
+  <div class="field"><label for="f10">예약 시각</label><input id="f10"></div>
+  <div class="pair"><button>저장</button><button>취소</button></div>
+  <div class="field"><label for="f11">태그</label><input id="f11"></div>
+  <div class="field"><label for="f12">설명</label><input id="f12"></div>
+  <button class="go">보내기</button>
+  <p role="status" aria-live="polite"></p>
+</section>
+<script>
+  // Scroll so the first button row sits 12px under the sticky header: it passes beneath it, as when a person scrolls.
+  { const sheet = document.querySelector('.sheet'), head = sheet.querySelector('.top').getBoundingClientRect().bottom;
+    const pair = document.getElementById('first-pair');
+    sheet.scrollTop += pair.getBoundingClientRect().top - (head - 12);
+    // Guard the fixture itself: content must run past both ends of the sheet and the row must sit under the header, or
+    // the self-test would pass without testing anything. A broken guard adds a button whose label fails the audit.
+    const port = sheet.getBoundingClientRect(), parts = [...sheet.querySelectorAll('label, input, button')].map(e => e.getBoundingClientRect());
+    const ok = parts.some(r => r.top < port.top) && parts.some(r => r.bottom > port.bottom) && Math.abs(pair.getBoundingClientRect().top - (head - 12)) < 1;
+    if (!ok) document.body.insertAdjacentHTML('beforeend', '<button data-qa-label style="width:48px">고정 HTML 전제 깨짐</button>'); }
+</script>
+</body></html>

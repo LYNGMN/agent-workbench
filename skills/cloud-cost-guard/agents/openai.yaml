@@ -1,0 +1,3 @@
+# skill-hints-sync가 만든 파일(코덱스 목록의 한국어 설명)
+interface:
+  short_description: "서버리스 사용량 비용 점검 · [점검할 쿼리나 배치]"

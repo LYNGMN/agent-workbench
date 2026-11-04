@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+# gstack-sync-links — gstack을 받거나 올린 뒤 새 스킬을 이 패키지의 연결 방식대로 잇고 깨진 링크를 지운다.
+#
+# 연결 방식(gstack setup의 등록 방식과 다름):
+#   ~/.agents/skills/gstack/gstack-<이름> -> ../../sources/garrytan/gstack/.agents/skills/gstack-<이름>   (Codex 등 공용)
+#   ~/.claude/skills/<이름>               -> ~/.agents/skills/gstack/gstack-<이름>                       (Claude)
+#   gstack-upgrade만 Claude 쪽 이름도 gstack-upgrade, claude-code(다른 호스트용)는 Claude 쪽에 두지 않는다.
+#   Claude 쪽 자리에 pack-prefix-sync가 만든 감싸개가 있으면 그대로 둔다(정상).
+#   ~/.claude가 없으면 Claude 쪽은 건너뛴다.
+#
+# 사용법:
+#   gstack-sync-links          바꿀 것을 보여 주고 고친다
+#   gstack-sync-links --check  고치지 않고 보여만 준다(맞지 않으면 종료 코드 1)
+set -euo pipefail
+
+CHECK=0
+[ "${1:-}" = "--check" ] && CHECK=1
+
+AGENTS_HOME="${WORKBENCH_AGENTS_HOME:-$HOME/.agents}"
+SRC="${GSTACK_SRC:-$AGENTS_HOME/sources/garrytan/gstack/.agents/skills}"
+AGENTS="${GSTACK_AGENTS_DIR:-$AGENTS_HOME/skills/gstack}"
+CLAUDE="${GSTACK_CLAUDE_DIR:-$HOME/.claude/skills}"
+CLAUDE_SKIP=" claude-code "
+MARK="pack-prefix-sync가 만든 파일"
+
+[ -d "$SRC" ] || { echo "gstack 스킬 문서가 없습니다: $SRC (install.sh가 bun으로 만듭니다)" >&2; exit 2; }
+HAS_CLAUDE=0
+[ -d "$(dirname "$CLAUDE")" ] && HAS_CLAUDE=1
+changes=0
+
+act() { # 설명, 명령...
+  changes=$((changes + 1))
+  echo "$1"
+  [ "$CHECK" -eq 1 ] || "${@:2}"
+}
+
+claude_name() { # gstack-<이름> -> Claude 쪽 이름
+  case "$1" in
+    gstack-upgrade) echo "gstack-upgrade" ;;
+    *) echo "${1#gstack-}" ;;
+  esac
+}
+
+[ -d "$AGENTS" ] || act "묶음 폴더 만들기: $AGENTS" mkdir -p "$AGENTS"
+[ "$HAS_CLAUDE" -eq 0 ] || [ -d "$CLAUDE" ] || act "Claude 스킬 폴더 만들기: $CLAUDE" mkdir -p "$CLAUDE"
+
+# 1) 원본에 있는 스킬을 이어 준다.
+for dir in "$SRC"/gstack-*/; do
+  full="$(basename "$dir")"
+  rel="../../sources/garrytan/gstack/.agents/skills/$full"
+  a="$AGENTS/$full"
+  if [ ! -L "$a" ] && [ ! -e "$a" ]; then
+    act "연결 추가: $a" ln -s "$rel" "$a"
+  fi
+
+  [ "$HAS_CLAUDE" -eq 1 ] || continue
+  short="$(claude_name "$full")"
+  case "$CLAUDE_SKIP" in *" $short "*) continue ;; esac
+  c="$CLAUDE/$short"
+  if [ -L "$c" ]; then
+    [ "$(readlink "$c")" = "$a" ] || echo "건너뜀(다른 곳을 가리킴, 직접 확인): $c -> $(readlink "$c")"
+  elif [ -f "$c/SKILL.md" ] && grep -q "$MARK" "$c/SKILL.md" 2>/dev/null; then
+    : # pack-prefix-sync가 모델 전용 감싸개로 바꿔 둔 자리
+  elif [ -e "$c" ]; then
+    echo "건너뜀(같은 이름의 실제 폴더가 있음): $c"
+  else
+    act "Claude 연결 추가: $c" ln -s "$a" "$c"
+  fi
+done
+
+# 2) 원본에서 사라진 스킬의 깨진 링크를 지운다(gstack 링크만 건드림).
+for a in "$AGENTS"/gstack-*; do
+  [ -L "$a" ] && [ ! -e "$a" ] && act "깨진 연결 삭제: $a" rm "$a"
+done
+if [ "$HAS_CLAUDE" -eq 1 ] && [ -d "$CLAUDE" ]; then
+  for c in "$CLAUDE"/*; do
+    [ -L "$c" ] || continue
+    case "$(readlink "$c")" in
+      "$AGENTS"/*) [ -e "$c" ] || act "깨진 Claude 연결 삭제: $c" rm "$c" ;;
+    esac
+  done
+fi
+
+if [ "$changes" -eq 0 ]; then
+  echo "gstack 연결이 모두 맞습니다(원본 $(ls -d "$SRC"/gstack-*/ | wc -l | tr -d ' ')개)."
+elif [ "$CHECK" -eq 1 ]; then
+  echo "맞지 않는 곳 ${changes}개. 고치려면: gstack-sync-links"
+  exit 1
+else
+  echo "${changes}곳을 고쳤습니다."
+fi

@@ -1,0 +1,362 @@
+#!/usr/bin/env python3
+# dsh-sync-skills — 공용 선반(~/.agents/skills)을 DeepSeek Harness가 읽는 자리(~/.dsh/skills)에 맞춘다.
+#
+# DeepSeek Harness는 ~/.dsh/skills(rank 400)와 ~/.agents/skills(rank 500)를 한 단계로만 읽는다.
+#   읽는 것: <root>/<이름>/SKILL.md, <root>/<이름>.md   — 같은 이름이면 rank가 작은 ~/.dsh/skills가 이긴다.
+#   name은 소문자·숫자·하이픈만, 어기면 조용히 빠진다.
+#   disable-model-invocation: true면 모델 목록에서 빠지고 /이름으로만 부른다.
+# 그래서 Claude 노출 설정(~/.claude/settings.json skillOverrides)을 기준으로
+#   on·설정 없음        → 묶음 안 스킬만 폴더 링크(최상위 스킬은 하네스가 이미 읽는다)
+#   user-invocable-only → <이름>.md 감싸개(disable-model-invocation: true, 실제 SKILL.md를 가리킴)
+#   off                 → 넣지 않는다
+#   gstack 묶음(WRAP_GROUPS)과 Claude 링크가 없는 묶음 스킬(Codex 전용) → 이름으로만
+#   Claude 링크가 없는 최상위 스킬 → 하네스가 그대로 읽게 둔다(자동)
+#   name이 규칙에 어긋나는 최상위 스킬(vibesec 등) → 폴더 이름으로 감싸개
+#   뺀다: SKIP(Claude 전용·사용자 정책)
+# 접두사 팩(PREFIX_GROUPS: superpowers, gstack, pstack)은 DSH에서 <팩>-<이름>으로 보인다.
+#   모델 호출용 원래 이름이 필요하면 <이름>.md(user-invocable: false)를 하나 더 두고,
+#   사람이 부르는 이름은 <팩>-<이름>.md(disable-model-invocation: true)로 둔다.
+#   pstack은 공용 선반 밖(~/.agents/sources/backnotprop/pstack/skills)에서 라우터(pstack_exclude)만 빼고 가져온다.
+# 이 스크립트가 만든 감싸개(MARK 표시)와 선반·원본을 가리키는 링크만 지운다. 손으로 둔 파일은 건드리지 않는다.
+# DeepSeek Harness가 없으면(~/.dsh 없음) 아무것도 하지 않는다.
+#
+# 사용법:
+#   dsh-sync-skills          바꿀 것을 보여 주기만 한다(맞지 않으면 종료 코드 1)
+#   dsh-sync-skills --apply  실제로 고친다
+#   dsh-sync-skills --list   고친 뒤 하네스에 보일 스킬을 자동/이름으로만으로 나눠 보여 준다
+import json
+import os
+import re
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'lib'))
+import workbench_config  # noqa: E402
+
+CONFIG = workbench_config.load()
+HOME = os.path.expanduser('~')
+DSH_HOME = os.environ.get('DSH_HOME', os.path.join(HOME, '.dsh'))
+SHELF = os.environ.get('DSH_SHELF', workbench_config.shelf())
+TARGET = os.environ.get('DSH_SKILLS_DIR', os.path.join(DSH_HOME, 'skills'))
+CLAUDE_SETTINGS = os.path.join(HOME, '.claude', 'settings.json')
+CLAUDE_SKILLS = os.path.join(HOME, '.claude', 'skills')
+SKIP = set(CONFIG['dsh_skip'])
+WRAP_GROUPS = set(CONFIG['dsh_wrap_groups'])  # 하네스에서 이름으로만 부르는 묶음
+PREFIX_GROUPS = {p: p for p in CONFIG['packs']}
+PSTACK_DIR = workbench_config.pstack_skills()
+PSTACK_EXCLUDE = set(CONFIG['pstack_exclude'])  # 라우터와 그 도움말 진입점
+NAME_OK = re.compile(r'^[a-z0-9]+(-[a-z0-9]+)*$')
+MARK = workbench_config.MARKS['dsh-sync-skills']
+MANAGED = workbench_config.managed_roots()
+
+
+def frontmatter(skill_md):
+    """SKILL.md 앞머리에서 name과 description만 읽는다(PyYAML 없이)."""
+    try:
+        with open(skill_md, encoding='utf-8') as f:
+            text = f.read(20000)
+    except OSError:
+        return None, None
+    if not text.startswith('---'):
+        return None, None
+    end = text.find('\n---', 3)
+    if end < 0:
+        return None, None
+    lines = text[3:end].strip('\n').split('\n')
+    name, desc = None, None
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        m = re.match(r'^(name|description):\s*(.*)$', line)
+        if not m:
+            i += 1
+            continue
+        key, value = m.group(1), m.group(2).strip()
+        if value in ('|', '>', '|-', '>-', '|+', '>+') or value == '':
+            block = []
+            i += 1
+            while i < len(lines) and (lines[i].startswith(' ') or lines[i].startswith('\t') or lines[i] == ''):
+                block.append(lines[i].strip())
+                i += 1
+            value = ' '.join(b for b in block if b)
+        else:
+            i += 1
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in '"\'':
+                value = value[1:-1]
+        if key == 'name':
+            name = value
+        else:
+            desc = value
+    return name, desc
+
+
+def claude_policy():
+    try:
+        with open(CLAUDE_SETTINGS, encoding='utf-8') as f:
+            return json.load(f).get('skillOverrides', {})
+    except (OSError, ValueError):
+        return {}
+
+
+def shelf_entries():
+    """선반을 훑어 (이름, 스킬 폴더, 최상위 여부, 원래 name, 묶음)을 돌려준다."""
+    out = []
+    for entry in sorted(os.listdir(SHELF)):
+        if entry.startswith('.'):
+            continue
+        path = os.path.join(SHELF, entry)
+        if os.path.isfile(os.path.join(path, 'SKILL.md')):
+            name, _ = frontmatter(os.path.join(path, 'SKILL.md'))
+            out.append((entry, path, True, name, None))
+        elif os.path.isdir(path):
+            for sub in sorted(os.listdir(path)):
+                skill_dir = os.path.join(path, sub)
+                if os.path.isfile(os.path.join(skill_dir, 'SKILL.md')):
+                    name, _ = frontmatter(os.path.join(skill_dir, 'SKILL.md'))
+                    out.append((sub, skill_dir, False, name, entry))
+    # pstack은 공용 선반 밖에 있어서 라우터(PSTACK_EXCLUDE)만 빼고 직접 가져온다.
+    if os.path.isdir(PSTACK_DIR):
+        for entry in sorted(os.listdir(PSTACK_DIR)):
+            if entry in PSTACK_EXCLUDE:
+                continue
+            skill_dir = os.path.join(PSTACK_DIR, entry)
+            if not os.path.isfile(os.path.join(skill_dir, 'SKILL.md')):
+                continue
+            name, _ = frontmatter(os.path.join(skill_dir, 'SKILL.md'))
+            out.append((entry, skill_dir, False, name, 'pstack'))
+    return out
+
+
+def pack_name(prefix, name):
+    """이름에서 팩 이름을 떼고 맨 앞에 한 번만 붙인다."""
+    parts = [part for part in name.split('-') if part != prefix]
+    base = '-'.join(parts)
+    return f'{prefix}-{base}' if base else prefix
+
+
+def claude_prefixed_wrapper(group, name):
+    """Claude에 pack-prefix-sync가 만든 <팩>-<이름> 사람용 감싸개가 있는가."""
+    prefix = PREFIX_GROUPS.get(group)
+    if prefix is None:
+        return False
+    try:
+        with open(os.path.join(CLAUDE_SKILLS, pack_name(prefix, name), 'SKILL.md'), encoding='utf-8') as f:
+            return 'pack-prefix-sync가 만든 파일' in f.read(4000)
+    except OSError:
+        return False
+
+
+def plan():
+    """{하네스 이름: (종류, 스킬 폴더, 이유, 접두사, 원래 이름)}와 메모를 만든다."""
+    policy = claude_policy()
+    claude_names = set(os.listdir(CLAUDE_SKILLS)) if os.path.isdir(CLAUDE_SKILLS) else set()
+    want, notes = {}, []
+    for folder, skill_dir, top, raw_name, group in shelf_entries():
+        name = raw_name if raw_name and NAME_OK.match(raw_name) else folder
+        if folder.startswith('gstack-') and not (raw_name and NAME_OK.match(raw_name)):
+            name = folder[len('gstack-'):]
+        if not NAME_OK.match(name):
+            notes.append(f'이름 규칙 위반으로 건너뜀: {skill_dir}')
+            continue
+        if name in SKIP:
+            continue
+        # Claude 쪽 이름: 폴더 이름(gstack-는 뗌) 또는 name
+        claude_key = name if name in policy or name in claude_names else folder
+        setting = policy.get(claude_key, policy.get(name))
+        in_claude = name in claude_names or folder in claude_names
+        bad_name = raw_name != name
+        if setting == 'off' and claude_prefixed_wrapper(group, name):
+            setting = 'user-invocable-only'  # pack-prefix-sync가 원래 이름을 끄고 <팩>-<이름>으로 옮긴 사람 전용 스킬
+        if setting == 'off':
+            continue
+        if setting == 'user-invocable-only':
+            kind, reason = 'wrap', 'Claude 설정: 이름으로만'
+        elif group in WRAP_GROUPS:
+            kind, reason = 'wrap', f'{group} 묶음: 이름으로만'
+        elif not in_claude and not top:
+            kind, reason = 'wrap', 'Claude에 없음(Codex 전용): 이름으로만'
+        elif bad_name and top:
+            kind, reason = 'wrap', f'name "{raw_name}"이 규칙에 어긋나 폴더 이름으로 감쌈'
+        elif top:
+            continue  # 하네스가 ~/.agents/skills에서 그대로 읽는다
+        else:
+            kind, reason = 'link', '자동 호출'
+
+        prefix = PREFIX_GROUPS.get(group)
+        if prefix is None:
+            if name in want:
+                notes.append(f'같은 이름 무시 {name}: {skill_dir}')
+                continue
+            want[name] = (kind, skill_dir, reason, None, name)
+            continue
+
+        # 접두사 팩: 이름에서 팩 이름을 떼고 맨 앞에 한 번만 붙인다.
+        # open-gstack-browser -> gstack-open-browser, diagnosing-superpowers -> superpowers-diagnosing.
+        # 모델 호출용 원래 이름이 필요하면(link) user-invocable: false 감싸개를 하나 더 둔다.
+        prefixed = pack_name(prefix, name)
+        targets = []
+        if kind == 'link':
+            targets.append((name, 'model-wrap', f'{prefix} 팩: 모델 호출용 원래 이름'))
+        targets.append((prefixed, 'wrap', f'{prefix} 팩: 사람 호출용 접두사'))
+        for target, target_kind, target_reason in targets:
+            if target in want:
+                notes.append(f'같은 이름 무시 {target}: {skill_dir}')
+                continue
+            want[target] = (target_kind, skill_dir, target_reason, prefix, name)
+    return want, notes
+
+
+def wrapper_text(name, skill_dir, reason, kind='wrap', prefix=None, base_name=None):
+    _, desc = frontmatter(os.path.join(skill_dir, 'SKILL.md'))
+    desc = (desc or name).strip()
+    if len(desc) > 480:
+        desc = desc[:477].rstrip() + '...'
+    real = os.path.join(skill_dir, 'SKILL.md')
+    if kind == 'model-wrap':
+        invocation = 'user-invocable: false\n'
+        human = pack_name(prefix, base_name) if prefix and base_name else name
+        note = (
+            f'({reason})\n\n'
+            f'사람이 부르는 이름은 `/{human}`이다. '
+            '이 파일은 모델 호출용 원래 이름을 유지한다.\n\n'
+        )
+    else:
+        invocation = 'disable-model-invocation: true\n'
+        note = f'({reason})\n\n'
+        if prefix:
+            note += (
+                f'이 스킬은 `{prefix}` 팩의 `{base_name}`이다. '
+                f'이 팩의 다른 스킬은 이름 앞에 `{prefix}-`를 붙여 부른다.\n\n'
+            )
+    return (
+        '---\n'
+        f'name: {name}\n'
+        f'description: {json.dumps(desc, ensure_ascii=False)}\n'
+        f'{invocation}'
+        '---\n'
+        f'{MARK}\n\n'
+        f'# {name}\n\n'
+        f'{note}'
+        f'1. `{real}`를 끝까지 읽고 그대로 따른다.\n'
+        f'2. 그 안의 상대 경로(`references/`, `scripts/` 등)는 `{skill_dir}` 기준으로 찾는다.\n'
+    )
+
+
+def is_ours(path):
+    if os.path.islink(path):
+        return workbench_config.points_inside(path, MANAGED)
+    if path.endswith('.md') and os.path.isfile(path):
+        try:
+            with open(path, encoding='utf-8') as f:
+                return MARK in f.read(4000)
+        except OSError:
+            return False
+    return False
+
+
+def main():
+    args = sys.argv[1:]
+    apply = '--apply' in args
+    if not os.path.isdir(DSH_HOME) and 'DSH_SKILLS_DIR' not in os.environ:
+        print(f'건너뜀: {DSH_HOME}가 없습니다(DeepSeek Harness 미설치)')
+        return 0
+    if not os.path.isdir(SHELF):
+        print(f'공용 선반이 없습니다: {SHELF}', file=sys.stderr)
+        return 2
+    want, notes = plan()
+
+    if '--list' in args:
+        auto = sorted(n for n, v in want.items() if v[0] == 'link')
+        model = sorted(n for n, v in want.items() if v[0] == 'model-wrap')
+        wrap = sorted(n for n, v in want.items() if v[0] == 'wrap')
+        top = sorted({(n if n and NAME_OK.match(n) else f) for f, _, t, n, _ in shelf_entries() if t} - set(want))
+        print(f'자동 호출, ~/.agents/skills 최상위 그대로 ({len(top)}): {", ".join(top)}')
+        print(f'자동 호출, 링크 ({len(auto)}): {", ".join(auto)}')
+        print(f'모델 전용, 원래 이름 ({len(model)}): {", ".join(model)}')
+        print(f'이름으로만 ({len(wrap)}): {", ".join(wrap)}')
+        return 0
+
+    if apply:
+        os.makedirs(TARGET, exist_ok=True)
+    existing = sorted(os.listdir(TARGET)) if os.path.isdir(TARGET) else []
+    changes = 0
+
+    def act(message, fn):
+        nonlocal changes
+        changes += 1
+        print(message)
+        if apply:
+            fn()
+
+    def write(path, text):
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write(text)
+
+    # 1) 있어야 할 것을 맞춘다.
+    for name, (kind, src, reason, prefix, base_name) in sorted(want.items()):
+        link_path = os.path.join(TARGET, name)
+        md_path = link_path + '.md'
+        if kind == 'link':
+            if is_ours(md_path):
+                act(f'감싸개 제거 {name}.md (링크로 바꿈)', lambda p=md_path: os.unlink(p))
+            if os.path.islink(link_path):
+                if os.path.realpath(link_path) == os.path.realpath(src):
+                    continue
+                act(f'교체 {name} -> {src}', lambda d=link_path, s=src: (os.unlink(d), os.symlink(s, d)))
+            elif os.path.exists(link_path):
+                print(f'건너뜀 {name}: 링크가 아닌 실제 폴더라 그대로 둡니다')
+            else:
+                act(f'추가 {name} -> {src}', lambda d=link_path, s=src: os.symlink(s, d))
+        else:
+            if os.path.islink(link_path):
+                act(f'링크 제거 {name} (감싸개로 바꿈)', lambda p=link_path: os.unlink(p))
+            text = wrapper_text(name, src, reason, kind, prefix, base_name)
+            if os.path.isfile(md_path) and not os.path.islink(md_path):
+                if not is_ours(md_path):
+                    print(f'건너뜀 {name}.md: 손으로 둔 파일이라 그대로 둡니다')
+                    continue
+                with open(md_path, encoding='utf-8') as f:
+                    if f.read() == text:
+                        continue
+                act(f'감싸개 갱신 {name}.md', lambda p=md_path, t=text: write(p, t))
+            else:
+                act(f'감싸개 추가 {name}.md ({reason})', lambda p=md_path, t=text: write(p, t))
+
+    # 2) 선반에서 사라졌거나 제외된 것을 지운다(이 스크립트가 만든 것만).
+    for entry in existing:
+        if entry.startswith('.'):
+            continue
+        path = os.path.join(TARGET, entry)
+        base = entry[:-3] if entry.endswith('.md') else entry
+        kind = want.get(base, (None,))[0]
+        if entry.endswith('.md') and kind in ('wrap', 'model-wrap'):
+            continue
+        if not entry.endswith('.md') and kind == 'link':
+            continue
+        if base in want:
+            continue  # 종류가 바뀐 경우는 1)에서 처리했다
+        if is_ours(path):
+            act(f'제거 {entry} (선반에 없음 또는 제외 대상)', lambda p=path: os.unlink(p))
+        else:
+            print(f'확인 필요 {entry}: 이 스크립트가 만들지 않은 항목입니다(지우지 않음)')
+
+    for note in notes:
+        print(note)
+
+    broken = [n for n in (os.listdir(TARGET) if os.path.isdir(TARGET) else [])
+              if os.path.islink(os.path.join(TARGET, n)) and not os.path.exists(os.path.join(TARGET, n))]
+    links = sum(1 for v in want.values() if v[0] == 'link')
+    models = sum(1 for v in want.values() if v[0] == 'model-wrap')
+    wraps = sum(1 for v in want.values() if v[0] == 'wrap')
+    summary = f'링크 {links}개, 모델 전용 {models}개, 감싸개 {wraps}개, 깨진 링크 {len(broken)}개'
+    if changes == 0:
+        print(f'바꿀 것 없음 ({summary})')
+        return 0
+    if apply:
+        print(f'{changes}건 고침 ({summary})')
+        return 0
+    print(f'{changes}건 바꿀 것 있음 — 고치려면 --apply')
+    return 1
+
+
+if __name__ == '__main__':
+    sys.exit(main())

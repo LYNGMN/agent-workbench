@@ -1,0 +1,4 @@
+interface:
+  display_name: "UI Visual QA"
+  short_description: "화면 정렬·대비 수치 검수 · [검수할 URL]"
+  default_prompt: "Use $ui-visual-qa to measure this UI (320/375/desktop, light and dark) before showing it."

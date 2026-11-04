@@ -1,0 +1,6 @@
+# Antigravity-style /agy commands for DSH.
+# The plugin is host-only: it registers slash commands and steers the agent,
+# with no client bundle and no dependency on the installation's @deepseek-ai packages.
+- insert:
+    - id: agy-commands
+      name: '@local/agy-commands'

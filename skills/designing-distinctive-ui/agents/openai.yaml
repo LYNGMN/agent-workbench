@@ -1,0 +1,6 @@
+interface:
+  display_name: "Distinctive UI Director"
+  short_description: "AI 템플릿 티 없는 화면 · [다시 꾸밀 화면이나 참고 이미지]"
+  default_prompt: "Use $designing-distinctive-ui to design or improve this interface while preserving its stack and verifying UI quality."
+policy:
+  allow_implicit_invocation: true

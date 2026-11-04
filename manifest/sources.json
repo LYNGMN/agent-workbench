@@ -1,0 +1,236 @@
+{
+  "comment": "외부 스킬 원본 목록. 복사해 싣지 않고 원본 저장소에서 받는다. commit은 이 패키지에서 시험한 커밋이다.",
+  "sources": [
+    {
+      "id": "superpowers",
+      "repo": "obra/superpowers",
+      "commit": "bb92a77741419a4ab5f06e711a283343f1ada0c3",
+      "license": "MIT",
+      "group": "core",
+      "about": "계획·디버깅·테스트 주도 개발 같은 개발 과정 스킬",
+      "shelf": [
+        {
+          "name": "superpowers",
+          "path": "skills",
+          "kind": "group"
+        }
+      ]
+    },
+    {
+      "id": "gstack",
+      "repo": "garrytan/gstack",
+      "commit": "c580561e8a5ac08e6cbdd52c7a0ce521ab6310a5",
+      "license": "MIT",
+      "group": "core",
+      "about": "브라우저 확인·리뷰·QA·배포 같은 실행형 스킬",
+      "build": "gstack",
+      "shelf": []
+    },
+    {
+      "id": "pstack",
+      "repo": "backnotprop/pstack",
+      "commit": "25abb38559ddbabec563646224d09eff9a250eca",
+      "license": "MIT",
+      "group": "core",
+      "about": "일하는 원칙·작업 방식 스킬(cursor/plugins의 pstack 미러). DeepSeek Harness에만 연결",
+      "shelf": []
+    },
+    {
+      "id": "karpathy",
+      "repo": "multica-ai/andrej-karpathy-skills",
+      "commit": "2c606141936f1eeef17fa3043a72095b4765b9c2",
+      "license": "MIT",
+      "group": "core",
+      "about": "가정 밝히기·작은 변경 같은 코드 작성 안전망",
+      "shelf": [
+        {
+          "name": "karpathy-guidelines",
+          "path": "skills/karpathy-guidelines"
+        }
+      ]
+    },
+    {
+      "id": "cloudflare",
+      "repo": "cloudflare/skills",
+      "commit": "86505e44f87d801aa1864a3c4109e9a8ae5c409f",
+      "license": "Apache-2.0",
+      "group": "extra",
+      "about": "Cloudflare Workers·Wrangler·D1 등 공식 스킬",
+      "shelf": [
+        {
+          "name": "cloudflare",
+          "path": "skills",
+          "kind": "group"
+        }
+      ]
+    },
+    {
+      "id": "trailofbits",
+      "repo": "trailofbits/skills",
+      "commit": "5c99c03fb8a9ea568432ecbcba5d86e9f4ac2bf0",
+      "license": "CC-BY-SA-4.0",
+      "group": "extra",
+      "about": "보안 검토 스킬 7개(차이 검토·공급망 등)",
+      "shelf": [
+        {
+          "name": "trailofbits",
+          "kind": "group",
+          "pick": {
+            "agentic-actions-auditor": "plugins/agentic-actions-auditor/skills/agentic-actions-auditor",
+            "audit-context-building": "plugins/audit-context-building/skills/audit-context-building",
+            "differential-review": "plugins/differential-review/skills/differential-review",
+            "fp-check": "plugins/fp-check/skills/fp-check",
+            "sharp-edges": "plugins/sharp-edges/skills/sharp-edges",
+            "supply-chain-risk-auditor": "plugins/supply-chain-risk-auditor/skills/supply-chain-risk-auditor",
+            "variant-analysis": "plugins/variant-analysis/skills/variant-analysis"
+          }
+        }
+      ]
+    },
+    {
+      "id": "owasp",
+      "repo": "agamm/claude-code-owasp",
+      "commit": "8ac7965caa212b4a850aff8d3df0081ab3fa9eed",
+      "license": "MIT",
+      "group": "extra",
+      "about": "OWASP 기준 보안 코딩 검토",
+      "shelf": [
+        {
+          "name": "owasp-security",
+          "path": ".claude/skills/owasp-security"
+        }
+      ]
+    },
+    {
+      "id": "vibesec",
+      "repo": "BehiSecc/VibeSec-Skill",
+      "commit": "0590993b35ad51961f65a4d01cf1196dfead05bb",
+      "license": "Apache-2.0",
+      "group": "extra",
+      "about": "바이브코딩 보안 검토",
+      "shelf": [
+        {
+          "name": "vibesec",
+          "path": "."
+        }
+      ]
+    },
+    {
+      "id": "superloopy",
+      "repo": "beefiker/superloopy",
+      "commit": "46580e6acbd0dad4ebaa523b72dd0517e70c124c",
+      "license": "MIT",
+      "group": "extra",
+      "about": "반복 작업 루프 스킬 묶음",
+      "shelf": [
+        {
+          "name": "superloopy",
+          "path": "skills",
+          "kind": "group"
+        }
+      ]
+    },
+    {
+      "id": "pinescript",
+      "repo": "jpantsjoha/pinescript-plugin",
+      "commit": "ea15df51ac6bd741cc1110eb54c48c35a474a608",
+      "license": "MIT",
+      "group": "extra",
+      "about": "TradingView Pine Script v6",
+      "shelf": [
+        {
+          "name": "pinescript",
+          "path": "skills",
+          "kind": "group"
+        }
+      ]
+    },
+    {
+      "id": "typesafe-ai",
+      "repo": "typesafe-ai/skills",
+      "commit": "65a39f393687675ce170e6094757de20370365b9",
+      "license": "MIT",
+      "group": "extra",
+      "about": "TypeSafe AI 안내",
+      "shelf": [
+        {
+          "name": "typesafe-ai",
+          "path": "skills/typesafe-ai"
+        }
+      ]
+    },
+    {
+      "id": "security-foundations",
+      "repo": "LYNGMN/security-foundations-plugin",
+      "commit": "4c2bd38cc13df75e8c3aab8618e83fd0a5ab80ab",
+      "license": "MIT",
+      "group": "extra",
+      "about": "보안 기초 진단(NIST CSF 2.0·ISO 27001 등)",
+      "shelf": [
+        {
+          "name": "security-foundations",
+          "path": "skills/security-foundations"
+        }
+      ]
+    },
+    {
+      "id": "impeccable",
+      "repo": "pbakaus/impeccable",
+      "commit": "46b822f7dda9f7dba799a9c7776fdc19b3a93559",
+      "license": "Apache-2.0",
+      "group": "extra",
+      "about": "화면 디자인 다듬기·점검(이 패키지의 designing-distinctive-ui가 엔진으로 씀)",
+      "shelf": [
+        {
+          "name": "impeccable",
+          "path": ".agents/skills/impeccable"
+        }
+      ]
+    },
+    {
+      "id": "taste-skill",
+      "repo": "Leonxlnx/taste-skill",
+      "commit": "63aba5f43b5056758b15bbe7d683da8c86a7a7ad",
+      "license": "MIT",
+      "group": "extra",
+      "about": "디자인 취향 스킬(이 패키지의 taste-skill 감싸개가 읽음)",
+      "shelf": []
+    },
+    {
+      "id": "taste-skill-classics",
+      "repo": "Leonxlnx/taste-skill-classics",
+      "commit": "5e08c9383dc4ad7fc0df70e1ac8cfa09ec356305",
+      "license": "MIT",
+      "group": "extra",
+      "about": "taste-skill에서 빠진 옛 스킬",
+      "shelf": []
+    },
+    {
+      "id": "imagegen-skills",
+      "repo": "Leonxlnx/imagegen-skills",
+      "commit": "beb16b0d0f4dae9a6f5cb04ea41e97b93a54ab8e",
+      "license": "MIT",
+      "group": "extra",
+      "about": "이미지 생성 디자인 스킬",
+      "shelf": []
+    },
+    {
+      "id": "ecc",
+      "repo": "affaan-m/ECC",
+      "commit": "c05b2d6614f62f6db0047669aa4eefb223d478f9",
+      "license": "MIT",
+      "group": "catalog",
+      "about": "보관만 하는 큰 카탈로그(약 120MB). 이 패키지의 ecc 입구 스킬이 필요할 때 한 파일씩 읽음",
+      "shelf": []
+    },
+    {
+      "id": "cybersecurity",
+      "repo": "mukul975/Anthropic-Cybersecurity-Skills",
+      "commit": "54a798831d2266a3ca61ce68a7acb80b81160d57",
+      "license": "Apache-2.0",
+      "group": "catalog",
+      "about": "보관만 하는 보안 카탈로그(약 60MB). 허가된 보안 작업에서만 하나씩 읽음",
+      "shelf": []
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Brave Search",
+    "description": "Brave Search API provider for the web_search tool.\nweb_search 도구에 Brave Search API를 연결하는 검색 공급자입니다."
+  }
+}
