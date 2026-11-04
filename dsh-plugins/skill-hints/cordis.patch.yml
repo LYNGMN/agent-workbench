@@ -1,0 +1,5 @@
+# 스킬 입력 힌트: argument-hint가 있는 스킬마다 같은 이름의 명령을 등록해
+# 입력창에 세부 명령 안내를 띄운다. 호스트 전용, 클라이언트 번들 없음.
+- insert:
+    - id: skill-hints
+      name: '@local/skill-hints'
