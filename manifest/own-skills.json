@@ -1,0 +1,23 @@
+{
+  "comment": "이 저장소 skills/에 든 스킬. requires에 적은 외부 원본(sources.json id)을 받았을 때만 선반에 잇는다. kind=group은 폴더 안의 스킬 여러 개를 묶은 것.",
+  "skills": [
+    {"name": "skill-router", "about": "작업 단계마다 스킬 하나를 고르는 관문"},
+    {"name": "wcag22-vibe-coding", "about": "WCAG 2.2 AA 접근성 기준으로 만들고 점검"},
+    {"name": "ui-visual-qa", "about": "UI를 바꾼 뒤 정렬·두 테마·줄바꿈·화면 밖을 숫자로 검수(Playwright)"},
+    {"name": "ui-alignment-check", "about": "아이콘·글자 중심, 버튼 간격·격자를 재기(Playwright)"},
+    {"name": "ui-dropdown-check", "about": "드롭다운·메뉴의 화살표·잘림·화면 밖을 재기(Playwright)"},
+    {"name": "icon-svg-implementation", "about": "아이콘·SVG·로고를 고르고 넣기"},
+    {"name": "korean-natural-writing", "about": "번역투·AI 말투 없이 자연스러운 한국어로 쓰기"},
+    {"name": "caching-architecture", "about": "브라우저·CDN·Redis 캐시 설계와 무효화"},
+    {"name": "cloud-cost-guard", "about": "사용량 과금 서버리스·유료 API 비용 점검(배포 전 관문)"},
+    {"name": "cloudflare-workers-ops", "about": "Cloudflare Workers·D1·R2 운영 사고에서 배운 것(cloud-cost-guard와 짝)"},
+    {"name": "signup-email-guard", "about": "일회용·익명 전달 메일 가입 막기 목록과 적용 규칙"},
+    {"name": "apps-script-ops", "about": "Google Apps Script(clasp) 배포·트리거·6분 한도"},
+    {"name": "designing-pine-signal-layouts", "about": "TradingView 지표의 신호·표시 배치"},
+    {"name": "developing-tradingview-pine-scripts", "about": "Pine Script 한도(토큰·플롯 64개) 안에서 만들기"},
+    {"name": "versioned-release", "about": "버전 파일과 변경 기록을 나누는 배포 규칙"},
+    {"name": "designing-distinctive-ui", "about": "흔한 AI 템플릿 느낌을 걷어 내는 화면 재설계", "requires": ["impeccable"]},
+    {"name": "taste-skill", "kind": "group", "about": "Leonxlnx 디자인 취향 스킬을 부를 때만 쓰는 감싸개 11개", "requires": ["taste-skill", "taste-skill-classics", "imagegen-skills"]},
+    {"name": "ecc", "about": "ECC 카탈로그에서 필요한 파일 하나만 읽는 입구", "requires": ["ecc"]}
+  ]
+}
