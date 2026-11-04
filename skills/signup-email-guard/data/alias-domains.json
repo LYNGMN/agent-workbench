@@ -1,0 +1,58 @@
+{
+  "checkedAt": "2026-10-20",
+  "howChecked": "dig +short MX <domain>: every domain below receives mail on the service's own mail servers (evidence column). Re-run scripts/check-mx.sh before trusting a stale list.",
+  "groups": {
+    "relay": "Anonymous forwarding (alias) services: one person can make unlimited throwaway addresses that forward to a hidden mailbox.",
+    "apple": "Apple Hide My Email / Sign in with Apple private relay. Many ordinary iPhone users have it; keep it a separate switch, off by default.",
+    "disposable": "Public temporary-mail list (data/disposable-domains.txt, CC0)."
+  },
+  "domains": [
+    {"group": "relay", "service": "Forward Email", "domain": "hash.fyi", "evidence": "MX mx1/mx2.forwardemail.net", "source": "https://forwardemail.net/en/disposable-addresses"},
+    {"group": "relay", "service": "Forward Email", "domain": "mailsire.com", "evidence": "MX mx1/mx2.forwardemail.net", "source": "https://forwardemail.net/en/disposable-addresses"},
+    {"group": "relay", "service": "Forward Email", "domain": "secret.fyi", "evidence": "MX mx1/mx2.forwardemail.net", "source": "https://forwardemail.net/en/disposable-addresses"},
+    {"group": "relay", "service": "Forward Email", "domain": "hideaddress.net", "evidence": "MX mx1/mx2.forwardemail.net", "source": "https://forwardemail.net/en/disposable-addresses"},
+
+    {"group": "relay", "service": "SimpleLogin (Proton)", "domain": "simplelogin.com", "evidence": "MX mx1/mx2.simplelogin.co", "source": "manual check 2026-10-19 + MX"},
+    {"group": "relay", "service": "SimpleLogin (Proton)", "domain": "simplelogin.fr", "evidence": "MX mx1/mx2.simplelogin.co", "source": "community list + MX"},
+    {"group": "relay", "service": "SimpleLogin (Proton)", "domain": "simplelogin.co", "evidence": "MX mx1/mx2.simplelogin.co", "source": "MX"},
+    {"group": "relay", "service": "SimpleLogin (Proton)", "domain": "simplelogin.io", "evidence": "MX mx1/mx2.simplelogin.co", "source": "MX"},
+    {"group": "relay", "service": "SimpleLogin (Proton)", "domain": "slmail.me", "evidence": "MX mx1/mx2.simplelogin.co", "source": "manual check 2026-10-19 + MX"},
+    {"group": "relay", "service": "SimpleLogin (Proton)", "domain": "slmails.com", "evidence": "MX mx1/mx2.simplelogin.co", "source": "manual check 2026-10-19 + MX"},
+    {"group": "relay", "service": "SimpleLogin (Proton)", "domain": "silomails.com", "evidence": "MX mx1/mx2.simplelogin.co", "source": "manual check 2026-10-19 + MX"},
+    {"group": "relay", "service": "SimpleLogin (Proton)", "domain": "aleeas.com", "evidence": "MX mx1/mx2.simplelogin.co", "source": "manual check 2026-10-19 + MX"},
+    {"group": "relay", "service": "SimpleLogin (Proton)", "domain": "8alias.com", "evidence": "MX mx1/mx2.simplelogin.co", "source": "community list + MX"},
+    {"group": "relay", "service": "SimpleLogin (Proton)", "domain": "8shield.net", "evidence": "MX mx1/mx2.simplelogin.co", "source": "community list + MX"},
+    {"group": "relay", "service": "SimpleLogin (Proton)", "domain": "dralias.com", "evidence": "MX mx1/mx2.simplelogin.co", "source": "community list + MX"},
+
+    {"group": "relay", "service": "Proton Pass", "domain": "passmail.net", "evidence": "MX mx1/mx2.simplelogin.co", "source": "MX"},
+    {"group": "relay", "service": "Proton Pass", "domain": "passmail.com", "evidence": "MX mx1/mx2.simplelogin.co", "source": "MX"},
+    {"group": "relay", "service": "Proton Pass", "domain": "passinbox.com", "evidence": "MX mx1/mx2.simplelogin.co", "source": "MX"},
+    {"group": "relay", "service": "Proton Pass", "domain": "passfwd.com", "evidence": "MX mx1/mx2.simplelogin.co", "source": "MX"},
+
+    {"group": "relay", "service": "DuckDuckGo Email Protection", "domain": "duck.com", "evidence": "MX smtp-inbound1.duck.com", "source": "user 2026-10-19 + MX"},
+
+    {"group": "relay", "service": "Firefox Relay", "domain": "mozmail.com", "evidence": "MX inbound-smtp.us-west-2.amazonaws.com (also *.mozmail.com)", "source": "user 2026-10-19 + MX"},
+    {"group": "relay", "service": "Firefox Relay", "domain": "relay.firefox.com", "evidence": "MX inbound-smtp.us-west-2.amazonaws.com", "source": "user 2026-10-19 + MX"},
+
+    {"group": "relay", "service": "addy.io (AnonAddy)", "domain": "anonaddy.com", "evidence": "MX mail(2).anonaddy.me = 213.108.105.57 (also username.anonaddy.com)", "source": "https://addy.io/faq/ + MX"},
+    {"group": "relay", "service": "addy.io (AnonAddy)", "domain": "anonaddy.me", "evidence": "MX mail(2).anonaddy.me = 213.108.105.57", "source": "https://addy.io/faq/ + MX"},
+    {"group": "relay", "service": "addy.io (AnonAddy)", "domain": "addy.io", "evidence": "MX mx1.addy.io = 213.108.105.57", "source": "MX"},
+    {"group": "relay", "service": "addy.io (AnonAddy)", "domain": "addymail.com", "evidence": "MX mx1.addymail.com = 213.108.105.57", "source": "MX"},
+    {"group": "relay", "service": "addy.io (AnonAddy)", "domain": "4wrd.cc", "evidence": "MX mx1.4wrd.cc = 213.108.105.57", "source": "MX"},
+    {"group": "relay", "service": "addy.io (AnonAddy)", "domain": "mailer.me", "evidence": "MX mx1.mailer.me = 213.108.105.57", "source": "MX"},
+
+    {"group": "relay", "service": "33mail", "domain": "33mail.com", "evidence": "aliases live on username.33mail.com (MX smtpv2.ec2.33mail.com)", "source": "MX"},
+    {"group": "relay", "service": "Spamgourmet", "domain": "spamgourmet.com", "evidence": "MX gourmet7.spamgourmet.com", "source": "MX"},
+    {"group": "relay", "service": "Spamgourmet", "domain": "spamgourmet.net", "evidence": "MX gourmet7.spamgourmet.com", "source": "MX"},
+    {"group": "relay", "service": "Spamgourmet", "domain": "spamgourmet.org", "evidence": "MX gourmet7.spamgourmet.com", "source": "MX"},
+    {"group": "relay", "service": "Erine Email", "domain": "erine.email", "evidence": "MX smtp-in.erine.email", "source": "MX"},
+    {"group": "relay", "service": "BurnerMail", "domain": "burnermail.io", "evidence": "MX mail.burnermail.io", "source": "MX"},
+
+    {"group": "apple", "service": "Apple Hide My Email", "domain": "privaterelay.appleid.com", "evidence": "MX smtp1-4.privaterelay.appleid.com", "source": "MX"}
+  ],
+  "notListed": [
+    {"service": "Fastmail Masked Email", "why": "Masks use fastmail.com and the user's own domains; blocking fastmail.com would block real mailboxes (decided 2026-10-16)."},
+    {"service": "Cloaked (cloaked.id)", "why": "Root MX is Google Workspace; the alias domain could not be confirmed."},
+    {"service": "IronVest / Blur (opayq.com)", "why": "Already in the public disposable list."}
+  ]
+}

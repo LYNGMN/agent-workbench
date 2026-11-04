@@ -1,0 +1,4 @@
+interface:
+  display_name: "캐싱 아키텍처"
+  short_description: "캐시 계층·무효화 설계 · [설계·검토·진단할 캐시]"
+  default_prompt: "$caching-architecture 스킬로 이 시스템의 캐시 계층, TTL, 무효화, 장애 위험을 검토해 주세요."

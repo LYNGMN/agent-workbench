@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="stylesheet" href="shared.css">
+<style>
+  /* Real defects that scrolling cannot reach: each must still fail (tests/self-test.mjs). */
+  button:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+  button { height: 44px; padding: 0 12px; border: 1px solid var(--border); background: var(--surface); color: var(--text); white-space: nowrap; }
+  /* 1. A fixed bar with no scroll whose second row hangs below the screen. */
+  .bar { position: fixed; left: 0; right: 0; bottom: 0; height: 60px; padding: 4px 16px; background: var(--bg); display: grid; gap: 4px; }
+  /* 2. A panel that scrolls inside but whose own box runs off the bottom: the end of it is never reachable. */
+  .panel { position: fixed; top: 40vh; left: 16px; width: 200px; height: 80vh; overflow-y: auto; overscroll-behavior: contain;
+    scrollbar-width: thin; scrollbar-color: var(--thumb) transparent; background: var(--surface); padding: 8px; }
+  .panel .filler { height: 120vh; }
+  /* 3. Two buttons that really overlap in a scrolling sheet: once in sight, once further down (they scroll together). */
+  .sheet { position: fixed; top: 16px; right: 16px; width: 140px; height: 160px; overflow-y: auto; overscroll-behavior: contain;
+    scrollbar-width: thin; scrollbar-color: var(--thumb) transparent; background: var(--surface); padding: 8px; }
+  .sheet button { display: block; width: 100%; }
+  .sheet .clash { margin-top: -30px; }
+  .sheet .filler { height: 400px; }
+  /* 4. A scrolling bottom sheet whose end sits in the home-indicator area (no safe-area padding; phones only). */
+  .low { position: fixed; left: 180px; right: 16px; bottom: 0; height: 120px; overflow-y: auto; overscroll-behavior: contain;
+    scrollbar-width: thin; scrollbar-color: var(--thumb) transparent; background: var(--surface); padding: 8px; }
+  .low .filler { height: 300px; }
+</style></head>
+<body>
+<p role="status" aria-live="polite"></p>
+<nav class="bar" aria-label="하단 막대"><button>보내기</button><button>나중에</button></nav>
+<aside class="panel" aria-label="목록"><div class="filler"></div><button>맨 끝 버튼</button></aside>
+<aside class="sheet" aria-label="시트"><button>첫째</button><button class="clash">둘째</button><div class="filler"></div><button>셋째</button><button class="clash">넷째</button></aside>
+<aside class="low" aria-label="하단 시트"><div class="filler"></div><button>끝</button></aside>
+</body></html>

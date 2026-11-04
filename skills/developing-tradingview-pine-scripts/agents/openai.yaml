@@ -1,0 +1,4 @@
+interface:
+  display_name: "TradingView Pine Script 개발"
+  short_description: "트레이딩뷰 파인 스크립트 작업 · [만들거나 고칠 파인 파일]"
+  default_prompt: "Use $developing-tradingview-pine-scripts to audit this Pine Script and make a limit-safe change."

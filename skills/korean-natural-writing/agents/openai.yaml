@@ -1,0 +1,6 @@
+interface:
+  display_name: "한국어 자연스러운 글쓰기"
+  short_description: "자연스러운 한국어 윤문 · [다듬을 글이나 파일]"
+  default_prompt: "$korean-natural-writing 스킬로 아래 글의 뜻과 말투를 유지하면서 자연스러운 한국어로 다듬어 주세요."
+policy:
+  allow_implicit_invocation: true
