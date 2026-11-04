@@ -1,0 +1,30 @@
+{
+  "comment": "도구들이 함께 쓰는 기본값. 바꾸고 싶으면 ~/.config/agent-workbench/config.json에 같은 이름의 칸만 적는다(그 칸이 통째로 바뀐다).",
+  "packs": ["gstack", "superpowers", "pstack"],
+  "claude_overrides_preset": {
+    "using-superpowers": "off"
+  },
+  "antigravity_skip": [
+    "using-superpowers", "codex",
+    "cloudflare-one", "cloudflare-one-migrations", "gateway-workers", "k2", "basin",
+    "gstack-upgrade", "setup-gbrain", "sync-gbrain", "superloopy-doctor", "superloopy-loop", "landing-report",
+    "ios-qa", "ios-fix", "ios-design-review", "ios-sync", "ios-clean",
+    "benchmark-models", "diagnosing-superpowers", "pair-agent", "skillify", "open-gstack-browser",
+    "office-hours", "plan-tune", "typesafe-ai", "agentic-actions-auditor", "security-foundations",
+    "superloopy-clone", "superloopy-backend", "superloopy-frontend", "superloopy-research",
+    "i-have-adhd", "say-it-straight", "investigate", "humanize-korean",
+    "sandbox-stable", "sandbox-next", "sandbox-migrate-to-next", "jev-decision", "eval-plan",
+    "brandkit", "imagegen-frontend-web", "imagegen-frontend-mobile",
+    "context-save", "context-restore", "learn", "retro",
+    "plan-ceo-review", "plan-eng-review", "plan-design-review", "plan-devex-review", "autoplan",
+    "design-shotgun", "design-consultation", "design-html",
+    "qa", "qa-only", "devex-review", "benchmark", "setup-deploy",
+    "document-generate", "document-release", "make-pdf",
+    "differential-review", "variant-analysis", "supply-chain-risk-auditor", "ecc",
+    "careful", "guard", "freeze", "unfreeze", "superloopy-slides", "setup-browser-cookies"
+  ],
+  "dsh_skip": ["codex", "claude-code"],
+  "dsh_wrap_groups": ["gstack"],
+  "pstack_exclude": ["poteto-mode", "poteto-help"],
+  "gstack_claude_skip": ["claude-code", "codex"]
+}
