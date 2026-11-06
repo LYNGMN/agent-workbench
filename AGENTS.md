@@ -30,3 +30,5 @@
 - 설치기가 `os.makedirs`로 만든 부모 폴더는 기록되지 않아 제거 뒤 빈 `~/.agents`가 남았다. 폴더는 `Plan.mkdir_quiet`로 만들어 없던 부모까지 하나씩 기록한다. — 처음 2026-11-04 — 지키는 방법: `test/install-test.sh` 7·8단계(제거 뒤 설치 전과 같음)
 - `~/.codex`가 있는지만으로 Codex 설치를 판단하면, gstack 실행 파일 자리(`~/.codex/skills/gstack`)를 만든 것만으로 Codex가 있다고 잘못 본다. `codex_present()`로 `skills` 말고 다른 것이 있는지 본다. — 처음 2026-11-04 — 지키는 방법: 시험 8단계(Claude만 있는 맥)
 - `gstack-sync-links`가 만든 `~/.agents/skills/gstack/gstack-*` 링크는 설치 기록에 없다. 제거기는 설치기가 만든 `gstack` 묶음 폴더에서 gstack 원본을 가리키는 링크만 지운다. — 처음 2026-11-04 — 지키는 방법: 시험 7단계
+- 전체 기록을 가진 원본에 `git fetch --depth 1`을 쓰면 얕은 저장소로 바뀐다. 옮길 때는 이미 있는 커밋이면 받지 않고, 전체 기록이 있으면 `--depth`를 빼고 받는다(`fetch_commit`). — 처음 2026-11-07 — 지키는 방법: 시험 9단계
+- 동기화 도구는 도구별 자리의 깨진 링크만 치운다. 원본에서 스킬이 사라지면 설치기가 건 선반·Claude 링크는 남으므로 `prune_broken_links`가 지운다. — 처음 2026-11-07 — 지키는 방법: 시험 9단계

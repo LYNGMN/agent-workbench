@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """agent-workbench 설치·점검·제거.
 
-    python3 lib/workbench.py install   [--apply] [--with extra,catalog,dsh-plugins,templates|all] [--no-gstack-build]
+    python3 lib/workbench.py install   [--apply] [--with extra,catalog,dsh-plugins,templates|all] [--no-gstack-build] [--update-sources]
     python3 lib/workbench.py doctor    [--json]
     python3 lib/workbench.py uninstall [--apply] [--purge-sources]
 
@@ -104,6 +104,30 @@ def src_dir(source):
 
 def selected_sources(groups):
     return [s for s in manifest() if s['group'] == 'core' or s['group'] in groups]
+
+
+def source_url(source):
+    mirror = os.environ.get('WORKBENCH_MIRROR')
+    local = os.path.join(mirror, source['repo']) if mirror else None
+    return local if local and os.path.isdir(local) else f'https://github.com/{source["repo"]}.git'
+
+
+def source_changes(dest):
+    """받은 뒤 고친 파일 목록. macOS가 저절로 만드는 .DS_Store는 뺀다."""
+    out = git(['--no-optional-locks', 'status', '--porcelain'], cwd=dest, check=False).stdout
+    return [line for line in out.splitlines() if not line.endswith('.DS_Store')]
+
+
+def fetch_commit(dest, url, commit):
+    """고정 커밋을 받아 둔다. 얕게 받지 못하면 전체를 받는다."""
+    if git(['cat-file', '-e', commit + '^{commit}'], cwd=dest, check=False).returncode == 0:
+        return
+    shallow = git(['rev-parse', '--is-shallow-repository'], cwd=dest, check=False).stdout.strip() == 'true'
+    has_head = git(['rev-parse', '-q', '--verify', 'HEAD'], cwd=dest, check=False).returncode == 0
+    # 전체 기록을 가진 원본에 --depth를 쓰면 얕은 저장소로 바뀌므로 그때는 쓰지 않는다.
+    depth = [] if has_head and not shallow else ['--depth', '1']
+    if git(['fetch', '-q'] + depth + [url, commit], cwd=dest, check=False).returncode != 0:
+        git(['fetch', '-q'] + (['--unshallow'] if shallow else []) + [url], cwd=dest)
 
 
 # ---------------------------------------------------------------- 설치 계획 실행기
@@ -220,21 +244,45 @@ def check_prereq(groups):
     return ok
 
 
-def clone_sources(plan, groups):
+def move_source(plan, source, head):
+    """받아 둔 원본을 고정 커밋으로 옮긴다. 옮겼으면(미리보기는 옮길 예정이면) True."""
+    dest = src_dir(source)
+    changes = source_changes(dest)
+    if changes:
+        plan.problem(f'건너뜀 {source["repo"]}: 받은 뒤 고친 파일 {len(changes)}개가 있어 옮기지 않았습니다'
+                     f'(예: {changes[0][3:]}). 고친 내용을 따로 보관하고 되돌린 뒤 다시 돌리세요')
+        return False
+    plan.step(f'옮기기 {source["repo"]}: {head[:7]} -> {source["commit"][:7]}')
+    if not plan.apply:
+        return True
+    try:
+        fetch_commit(dest, source_url(source), source['commit'])
+        git(['checkout', '-q', source['commit']], cwd=dest)
+    except subprocess.CalledProcessError as e:
+        plan.problem(f'{source["repo"]} 옮기기 실패: {(e.stderr or "").strip()[:300]}')
+        return False
+    return True
+
+
+def clone_sources(plan, groups, update=False):
+    """원본을 받고, update면 받아 둔 원본도 고정 커밋으로 옮긴다. 옮긴 원본 id를 돌려준다."""
     say('[2/9] 외부 스킬 원본 받기(복사본을 싣지 않고 원본 저장소에서 받음)')
-    mirror = os.environ.get('WORKBENCH_MIRROR')
+    moved = set()
     for source in selected_sources(groups):
         dest = src_dir(source)
         if os.path.isdir(os.path.join(dest, '.git')) or os.path.isfile(os.path.join(dest, '.git')):
             head = git(['rev-parse', 'HEAD'], cwd=dest, check=False).stdout.strip()
-            if head != source['commit']:
-                say(f'  · 그대로 둠 {source["repo"]}: 이미 받아 둔 다른 커밋 {head[:7]} (시험한 커밋 {source["commit"][:7]})')
+            if head == source['commit']:
+                continue
+            if update:
+                if move_source(plan, source, head):
+                    moved.add(source['id'])
+            else:
+                say(f'  · 그대로 둠 {source["repo"]}: 이미 받아 둔 다른 커밋 {head[:7]} (시험한 커밋 {source["commit"][:7]}, 옮기려면 --update-sources)')
             continue
         if os.path.exists(dest):
             plan.problem(f'{short(dest)}가 git 저장소가 아니라서 받지 않았습니다')
             continue
-        local = os.path.join(mirror, source['repo']) if mirror else None
-        url = local if local and os.path.isdir(local) else f'https://github.com/{source["repo"]}.git'
         plan.step(f'받기 {source["repo"]} @ {source["commit"][:7]} ({source["license"]}) -> {short(dest)}')
         if not plan.apply:
             continue
@@ -244,15 +292,24 @@ def clone_sources(plan, groups):
             git(['init', '-q', dest])
             plan.record({'kind': 'clone', 'path': dest, 'repo': source['repo']})
             git(['remote', 'add', 'origin', f'https://github.com/{source["repo"]}.git'], cwd=dest)
-            fetch = git(['fetch', '-q', '--depth', '1', url, source['commit']], cwd=dest, check=False)
-            if fetch.returncode != 0:
-                git(['fetch', '-q', url], cwd=dest)
+            fetch_commit(dest, source_url(source), source['commit'])
             git(['checkout', '-q', source['commit']], cwd=dest)
         except subprocess.CalledProcessError as e:
             plan.problem(f'{source["repo"]} 받기 실패: {(e.stderr or "").strip()[:300]}')
+    return moved
 
 
-def prepare_gstack(plan, build):
+def prune_broken_links(plan):
+    """원본을 옮기며 사라진 스킬의 링크를 지운다. 이 설치기가 만들었고 지금 깨진 링크만 지운다."""
+    for item in plan.state['created']:
+        p = item['path']
+        if item['kind'] == 'link' and os.path.islink(p) and os.readlink(p) == item['target'] and not os.path.exists(p):
+            plan.step(f'깨진 연결 지우기 {short(p)} (원본에서 사라진 스킬)')
+            os.unlink(p)
+
+
+def prepare_gstack(plan, build, refresh=False):
+    """refresh는 gstack 원본을 옮겼을 때다. 문서와 실행 파일을 다시 만든다(실패해도 다른 일은 계속)."""
     if not os.path.isdir(GSTACK) and not plan.apply:
         say('[3/9] gstack 준비: 받은 뒤 bun으로 스킬 문서를 만듭니다')
         return
@@ -262,19 +319,23 @@ def prepare_gstack(plan, build):
     docs = os.path.join(GSTACK, '.agents', 'skills')
     has_docs = os.path.isdir(docs) and any(n.startswith('gstack-') for n in os.listdir(docs))
     bun = shutil.which('bun')
-    if not has_docs:
-        if not bun:
+    if not has_docs or refresh:
+        if bun:
+            if refresh or not os.path.isdir(os.path.join(GSTACK, 'node_modules')):
+                plan.run('gstack 의존성 설치(bun install)', [bun, 'install', '--frozen-lockfile'], cwd=GSTACK,
+                         allow_fail=refresh)
+            plan.run('gstack 스킬 문서 만들기(bun run gen:skill-docs --host codex)',
+                     [bun, 'run', 'gen:skill-docs', '--host', 'codex'], cwd=GSTACK, allow_fail=refresh)
+        else:
             plan.problem('bun이 없어 gstack 스킬 문서를 만들지 못했습니다. bun 설치 후 install.sh를 다시 돌리세요')
-            return
-        if not os.path.isdir(os.path.join(GSTACK, 'node_modules')):
-            plan.run('gstack 의존성 설치(bun install)', [bun, 'install', '--frozen-lockfile'], cwd=GSTACK)
-        plan.run('gstack 스킬 문서 만들기(bun run gen:skill-docs --host codex)',
-                 [bun, 'run', 'gen:skill-docs', '--host', 'codex'], cwd=GSTACK)
+            if not has_docs:
+                return
     browse = os.path.join(GSTACK, 'browse', 'dist', 'browse')
-    if build and bun and not os.path.exists(browse):
+    need_build = refresh or not os.path.exists(browse)
+    if build and bun and need_build:
         plan.run('gstack 브라우저 실행 파일 만들기(bun run build, 몇 분 걸림)', [bun, 'run', 'build'],
                  cwd=GSTACK, allow_fail=True)
-    elif not os.path.exists(browse):
+    elif need_build:
         say('  · gstack 브라우저 실행 파일은 만들지 않았습니다(/gstack-browse 등은 나중에: cd ~/.agents/sources/garrytan/gstack && bun run build)')
 
     # 실행 파일 자리: gstack 스킬은 ~/.codex/skills/gstack/bin 등을 찾는다. 원본 폴더를 통째로 두면
@@ -512,6 +573,7 @@ def parse_groups(args):
 
 def install(args):
     apply = '--apply' in args
+    update = '--update-sources' in args
     groups = parse_groups(args)
     say(f'agent-workbench 설치 {"(적용)" if apply else "(미리보기: 아무것도 바꾸지 않음)"} — 저장소 {short(REPO)}')
     say(f'  고른 것: 기본{"" if not groups else " + " + ", ".join(sorted(groups))}')
@@ -520,9 +582,13 @@ def install(args):
     plan = Plan(apply)
     if apply:
         snapshot_links(plan)
-    clone_sources(plan, groups)
-    prepare_gstack(plan, build='--no-gstack-build' not in args)
-    entries = link_shelf(plan, groups)
+    # 옮길 때는 전에 고른 묶음의 원본까지 함께 본다. --with를 다시 적지 않아도 빠지지 않게.
+    source_groups = groups | set(plan.state.get('groups', [])) if update else groups
+    moved = clone_sources(plan, source_groups, update)
+    prepare_gstack(plan, build='--no-gstack-build' not in args, refresh='gstack' in moved)
+    if apply and moved:
+        prune_broken_links(plan)
+    entries = link_shelf(plan, source_groups)
     link_tools(plan)
     link_claude(plan, entries)
     sync_tools(plan)
@@ -535,7 +601,8 @@ def install(args):
     if plan.problems:
         say(f'끝났지만 확인할 것 {len(plan.problems)}건이 있습니다(위의 ! 줄).')
     if not apply:
-        say(f'할 일 {plan.count}건. 실제로 바꾸려면: ./install.sh --apply' + (f' --with {",".join(sorted(groups))}' if groups else ''))
+        say(f'할 일 {plan.count}건. 실제로 바꾸려면: ./install.sh --apply' + (' --update-sources' if update else '')
+            + (f' --with {",".join(sorted(groups))}' if groups else ''))
     else:
         say(f'설치를 마쳤습니다(바꾼 것 {plan.count}건). 상태 점검: ./doctor.sh   제거: ./uninstall.sh')
     return 1 if plan.problems else 0
@@ -567,7 +634,7 @@ def doctor(args):
             check(f'원본 {source["repo"]}', False, '받지 않음 — ./install.sh --apply')
             continue
         head = git(['rev-parse', 'HEAD'], cwd=dest, check=False).stdout.strip()
-        check(f'원본 {source["repo"]}', True, head[:7] + ('' if head == source['commit'] else f' (시험한 커밋 {source["commit"][:7]}와 다름)'))
+        check(f'원본 {source["repo"]}', True, head[:7] + ('' if head == source['commit'] else f' (시험한 커밋 {source["commit"][:7]}와 다름 — 옮기려면 ./install.sh --apply --update-sources)'))
     if os.path.isdir(GSTACK):
         docs = os.path.join(GSTACK, '.agents', 'skills')
         check('gstack 스킬 문서', os.path.isdir(docs), '없음 — bun 설치 후 ./install.sh --apply')
@@ -758,8 +825,7 @@ def uninstall(args):
                 continue
             if not os.path.isdir(p):
                 continue
-            dirty = git(['status', '--porcelain'], cwd=p, check=False).stdout.strip()
-            if dirty and not all(l.endswith('.DS_Store') for l in dirty.splitlines()):
+            if source_changes(p):
                 say(f'  · 그대로 둠 {short(p)}: 받은 뒤 고친 파일이 있음')
                 continue
             act(f'받은 원본 지우기 {short(p)}', lambda p=p: shutil.rmtree(p))
