@@ -43,6 +43,17 @@ def sources():
     return os.path.join(agents_home(), 'sources')
 
 
+def hints_overlay():
+    """스킬 입력 힌트 목록. 사용자 자리(~/.agents/skill-hints.json)에 없으면 이 저장소의 기본 목록."""
+    path = os.path.join(agents_home(), 'skill-hints.json')
+    return path if os.path.isfile(path) else os.path.join(REPO, 'config', 'skill-hints.json')
+
+
+def hints_state():
+    """skill-hints-sync가 원래 값을 적어 두는 파일."""
+    return os.path.join(agents_home(), '.skill-hints-state.json')
+
+
 def pstack_skills():
     """pstack 스킬 폴더. 설치기가 받는 자리를 먼저, 예전 자리(~/Dev/pstack)를 다음으로 본다."""
     env = os.environ.get('DSH_PSTACK_DIR')

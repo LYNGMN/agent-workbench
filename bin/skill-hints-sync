@@ -1,0 +1,292 @@
+#!/usr/bin/env python3
+# skill-hints-sync — 한국어 입력 힌트 한 곳(~/.agents/skill-hints.json)을 스킬 원본에 넣는다.
+#
+# 넣는 것
+#   SKILL.md 머리말 argument-hint      Claude Code·VS Code 입력 자동완성, 코덱스, 딥시크 하네스(@local/skill-hints)
+#   agents/openai.yaml short_description  코덱스 스킬 고르기 목록(요약 · 힌트)
+# 말머리 감싸개(gstack-*, superpowers-*, pstack-*)는 원본에서 힌트를 복사하므로
+# 이 스크립트 다음에 pack-prefix-sync --apply, dsh-sync-skills --apply를 돌린다.
+#
+# 원래 값은 ~/.agents/.skill-hints-state.json에 적어 두고 --remove로 되돌린다.
+# 남의 git 저장소(superpowers 등)를 갱신하기 전에는 --remove, 갱신한 뒤 --apply.
+# (install.sh --update-sources와 uninstall.sh는 이 순서를 스스로 지킨다.)
+#
+# 고치는 곳: 공용 선반(~/.agents/skills)과 pstack이 가리키는 원본. 이 저장소의 직접 만든 스킬은
+# 힌트를 스스로 갖고 있어 고치지 않는다. 더 볼 곳은 설정의 skill_hints_extra_roots,
+# 켜진 Claude 플러그인은 skill_hints_claude_plugins: true일 때만 본다.
+#
+# 사용법: skill-hints-sync [--apply | --remove | --check]   (인자 없으면 바꿀 것만 보여 준다)
+import json
+import os
+import re
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'lib'))
+import workbench_config as wc  # noqa: E402
+
+HOME = wc.HOME
+CONFIG = wc.load()
+
+
+def env_paths(name, default):
+    value = os.environ.get(name)
+    paths = value.split(os.pathsep) if value is not None else default
+    return [os.path.expanduser(p) for p in paths if p]
+
+
+OVERLAY = os.environ.get('SHS_OVERLAY') or wc.hints_overlay()
+STATE = os.environ.get('SHS_STATE', wc.hints_state())
+SHELF = os.environ.get('SHS_SHELF', wc.shelf())
+EXTRA_ROOTS = env_paths('SHS_EXTRA_ROOTS', [wc.pstack_skills()] + CONFIG.get('skill_hints_extra_roots', []))
+CLAUDE_DIR = os.environ.get('SHS_CLAUDE_DIR', os.path.join(HOME, '.claude'))
+CLAUDE_PLUGINS = CONFIG.get('skill_hints_claude_plugins', False)
+WRAPPER_MARKS = tuple(m.split(':')[0] for m in wc.MARKS.values())  # 동기화 도구가 만든 감싸개는 원본이 아니다
+# 다른 작업 브랜치의 작업본처럼 고치면 안 되는 곳(설정 skill_hints_skip_roots). 이 저장소는 늘 뺀다.
+SKIP_ROOTS = env_paths('SHS_SKIP_ROOTS', CONFIG.get('skill_hints_skip_roots', []))
+OWN_ROOT = os.path.realpath(wc.REPO)
+YAML_MARK = '# skill-hints-sync가 만든 파일'
+
+
+def read(path, limit=None):
+    try:
+        with open(path, encoding='utf-8') as f:
+            return f.read() if limit is None else f.read(limit)
+    except OSError:
+        return None
+
+
+def write(path, text):
+    tmp = path + '.shs-tmp'
+    with open(tmp, 'w', encoding='utf-8') as f:
+        f.write(text)
+    os.replace(tmp, path)
+
+
+def split_front(text):
+    """(머리말 줄 목록, 닫는 줄 위치) 또는 None."""
+    if not text or not text.startswith('---'):
+        return None
+    end = text.find('\n---', 3)
+    if end < 0:
+        return None
+    return text[:end].split('\n'), end
+
+
+def front_name(text):
+    parts = split_front(text)
+    if not parts:
+        return None
+    for line in parts[0][1:]:
+        m = re.match(r'^name:\s*(.+?)\s*$', line)
+        if m:
+            return m.group(1).strip('"\'')
+    return None
+
+
+def get_hint_line(lines):
+    for i, line in enumerate(lines):
+        if re.match(r'^argument-hint:', line):
+            return i
+    return None
+
+
+def set_hint(text, hint):
+    """argument-hint 줄을 hint로 맞춘 새 글. hint가 None이면 그 줄을 지운다."""
+    lines, end = split_front(text)
+    i = get_hint_line(lines)
+    if hint is None:
+        if i is not None:
+            del lines[i]
+    else:
+        new = f'argument-hint: {json.dumps(hint, ensure_ascii=False)}'
+        if i is None:
+            lines.append(new)
+        else:
+            lines[i] = new
+    return '\n'.join(lines) + text[end:]
+
+
+def current_hint(text):
+    lines, _ = split_front(text)
+    i = get_hint_line(lines)
+    return None if i is None else lines[i]
+
+
+def sources():
+    """원본 SKILL.md: {이름: [경로...]} (실제 경로 기준으로 한 번씩, 감싸개 제외)."""
+    found, seen = {}, set()
+
+    def take(md):
+        real = os.path.realpath(md)
+        if real in seen or not os.path.isfile(real):
+            return
+        text = read(real, 6000) or ''
+        if any(mark in text for mark in WRAPPER_MARKS):
+            return
+        name = front_name(text)
+        if not name:
+            return
+        seen.add(real)
+        if real.startswith(OWN_ROOT + os.sep):
+            found.setdefault(name, [])  # 직접 만든 스킬: 있다고만 적고 고치지 않는다
+            return
+        found.setdefault(name, []).append(real)
+
+    def scan(root, depth):
+        try:
+            entries = sorted(os.listdir(root))
+        except OSError:
+            return
+        for entry in entries:
+            if entry.startswith('.'):
+                continue
+            path = os.path.join(root, entry)
+            if os.path.isfile(os.path.join(path, 'SKILL.md')):
+                take(os.path.join(path, 'SKILL.md'))
+            elif depth > 1 and os.path.isdir(path):
+                scan(path, depth - 1)
+
+    scan(SHELF, 2)
+    for root in EXTRA_ROOTS:
+        scan(root, 1)
+    if not CLAUDE_PLUGINS:
+        return found
+    # 켜진 Claude 플러그인의 스킬
+    try:
+        settings = json.load(open(os.path.join(CLAUDE_DIR, 'settings.json'), encoding='utf-8'))
+        installed = json.load(open(os.path.join(CLAUDE_DIR, 'plugins', 'installed_plugins.json'), encoding='utf-8')).get('plugins', {})
+    except (OSError, ValueError):
+        settings, installed = {}, {}
+    for plugin, on in settings.get('enabledPlugins', {}).items():
+        info = installed.get(plugin)
+        if on and info:
+            base = (info[0] if isinstance(info, list) else info).get('installPath', '')
+            scan(os.path.join(base, 'skills'), 1)
+    return found
+
+
+def short_description(entry):
+    if entry.get('codex'):
+        return entry['codex'].strip()  # 코덱스 목록용 문구를 따로 정한 경우
+    summary = (entry.get('summary') or '').strip()
+    hint = (entry.get('hint') or '').strip()
+    return f'{summary} · {hint}' if summary and hint else summary or hint
+
+
+def set_short(yaml_text, value):
+    line = f'  short_description: {json.dumps(value, ensure_ascii=False)}'
+    if re.search(r'(?m)^  short_description:.*$', yaml_text):
+        return re.sub(r'(?m)^  short_description:.*$', lambda _: line, yaml_text, count=1)
+    if re.search(r'(?m)^interface:\s*$', yaml_text):
+        return re.sub(r'(?m)^interface:\s*$', lambda m: m.group(0) + '\n' + line, yaml_text, count=1)
+    return yaml_text.rstrip('\n') + '\ninterface:\n' + line + '\n'
+
+
+def main():
+    args = sys.argv[1:]
+    mode = 'remove' if '--remove' in args else 'apply' if '--apply' in args else 'check'
+    state = json.loads(read(STATE) or '{}')
+    overlay = json.loads(read(OVERLAY) or '{}').get('skills', {})
+    changes, log = 0, []
+
+    def change(message, fn):
+        nonlocal changes
+        changes += 1
+        log.append(message)
+        if mode != 'check':
+            fn()
+
+    if mode == 'remove':
+        for path, rec in sorted(state.items()):
+            if path.endswith('openai.yaml'):
+                if rec.get('created'):
+                    def rm(p=path):
+                        if os.path.exists(p):
+                            os.remove(p)
+                        try:
+                            os.rmdir(os.path.dirname(p))  # 비었을 때만 지워진다
+                        except OSError:
+                            pass
+                    change(f'지움 {path}', rm)
+                elif rec.get('orig') is not None or 'orig' in rec:
+                    text = read(path)
+                    if text is not None:
+                        old = rec['orig']
+                        new = (re.sub(r'(?m)^  short_description:.*\n?', '', text) if old is None
+                               else re.sub(r'(?m)^  short_description:.*$', lambda _: old, text, count=1))
+                        if new != text:
+                            change(f'되돌림 {path}', lambda p=path, t=new: write(p, t))
+                continue
+            text = read(path)
+            if text is None or not split_front(text):
+                continue
+            orig = rec.get('orig')
+            lines, end = split_front(text)
+            i = get_hint_line(lines)
+            if orig is None and i is not None:
+                del lines[i]
+            elif orig is not None:
+                if i is None:
+                    lines.append(orig)
+                else:
+                    lines[i] = orig
+            new = '\n'.join(lines) + text[end:]
+            if new != text:
+                change(f'되돌림 {path}', lambda p=path, t=new: write(p, t))
+        if mode != 'check':
+            if os.path.exists(STATE):
+                os.remove(STATE)
+    else:
+        src = sources()
+        missing = sorted(n for n in overlay if n not in src)
+        for name, entry in sorted(overlay.items()):
+            hint = (entry.get('hint') or '').strip() or None
+            for path in src.get(name, []):
+                if any(path.startswith(os.path.realpath(r) + os.sep) for r in SKIP_ROOTS):
+                    log.append(f'건너뜀 {name}: {path.replace(HOME, "~")} (다른 작업 브랜치의 작업본)')
+                    continue
+                text = read(path)
+                if text is None or not split_front(text):
+                    continue
+                new = set_hint(text, hint)
+                if new != text:
+                    def do(p=path, t=new, old=current_hint(text)):
+                        state.setdefault(p, {'orig': old})
+                        write(p, t)
+                    change(f'힌트 {name}: {path.replace(HOME, "~")}', do)
+                short = short_description(entry) if hint else None
+                if not short:
+                    continue
+                ypath = os.path.join(os.path.dirname(path), 'agents', 'openai.yaml')
+                ytext = read(ypath)
+                if ytext is None:
+                    new_y = f'{YAML_MARK}(코덱스 목록의 한국어 설명)\ninterface:\n  short_description: {json.dumps(short, ensure_ascii=False)}\n'
+
+                    def mk(p=ypath, t=new_y):
+                        state.setdefault(p, {'created': True})
+                        os.makedirs(os.path.dirname(p), exist_ok=True)
+                        write(p, t)
+                    change(f'코덱스 설명 추가 {name}: {ypath.replace(HOME, "~")}', mk)
+                else:
+                    new_y = set_short(ytext, short)
+                    if new_y != ytext:
+                        m = re.search(r'(?m)^  short_description:.*$', ytext)
+
+                        def up(p=ypath, t=new_y, old=m.group(0) if m else None):
+                            state.setdefault(p, {'orig': old})
+                            write(p, t)
+                        change(f'코덱스 설명 {name}: {ypath.replace(HOME, "~")}', up)
+        if missing:
+            log.append(f'· 힌트 목록에 있지만 설치하지 않은 스킬 {len(missing)}개는 건너뜀')
+        if mode == 'apply' and changes:
+            os.makedirs(os.path.dirname(STATE), exist_ok=True)
+            write(STATE, json.dumps(state, ensure_ascii=False, indent=1, sort_keys=True) + '\n')
+    for line in log:
+        print(line)
+    verb = {'apply': '고침', 'remove': '되돌림', 'check': '바꿀 것'}[mode]
+    print(f'{verb} {changes}건' if changes else '바꿀 것 없음')
+    return 1 if mode == 'check' and changes else 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

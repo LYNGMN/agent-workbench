@@ -26,5 +26,8 @@
   "dsh_skip": ["codex", "claude-code"],
   "dsh_wrap_groups": ["gstack"],
   "pstack_exclude": ["poteto-mode", "poteto-help"],
-  "gstack_claude_skip": ["claude-code", "codex"]
+  "gstack_claude_skip": ["claude-code", "codex"],
+  "skill_hints_extra_roots": [],
+  "skill_hints_skip_roots": [],
+  "skill_hints_claude_plugins": false
 }
