@@ -33,7 +33,7 @@ flowchart LR
 | 부품 | 이어지는 곳 | 방법 |
 |---|---|---|
 | `install.sh` 등 | `lib/workbench.py` | `python3`로 실행만 넘김 |
-| `lib/workbench.py` | 원본 GitHub 저장소 | `git init` + `git fetch --depth 1 <주소> <커밋>`, 안 되면 전체 fetch |
+| `lib/workbench.py` | 원본 GitHub 저장소 | `git init` + `git fetch --depth 1 <주소> <커밋>`, 안 되면 전체 fetch. 이미 받아 둔 원본은 `--update-sources`일 때만 같은 방법으로 받아 `checkout`(이미 있는 커밋이면 받지 않고, 전체 기록을 가진 원본에는 `--depth`를 쓰지 않음) |
 | `lib/workbench.py` | `~/.agents/skills` | 원본은 상대 링크, 직접 만든 스킬은 이 저장소로 가는 절대 링크 |
 | `lib/workbench.py` | `bin/` 동기화 도구 | 하위 프로세스로 `--apply` 실행 |
 | `bin/` 동기화 도구 | 도구별 스킬 폴더 | 링크, 또는 MARK 주석을 단 감싸개 `SKILL.md` |
@@ -44,8 +44,9 @@ flowchart LR
 
 | 부품 | 맡는 일 | 맡지 않는 일 |
 |---|---|---|
-| `lib/workbench.py` | 원본 받기, gstack 문서 생성·빌드, 선반·도구·Claude 링크, 동기화 도구 차례 실행, 플러그인·지침 틀 설치, 점검, 기록대로 제거 | 도구별 이름 규칙(동기화 도구가 맡음) |
+| `lib/workbench.py` | 원본 받기·고정 커밋으로 옮기기, gstack 문서 생성·빌드, 선반·도구·Claude 링크, 동기화 도구 차례 실행, 플러그인·지침 틀 설치, 점검, 기록대로 제거 | 도구별 이름 규칙(동기화 도구가 맡음) |
 | `lib/workbench_config.py` | 경로(`$HOME` 기준), 설정 합치기, MARK 문구, "이 패키지가 관리하는 자리" 판단 | 파일 쓰기 |
+| `bin/skill-hints-sync` | `~/.agents/skill-hints.json`(없으면 `config/skill-hints.json`)의 힌트를 선반·pstack 원본의 `SKILL.md` `argument-hint`와 `agents/openai.yaml` `short_description`에 넣고, 원래 값을 `~/.agents/.skill-hints-state.json`에 적어 `--remove`로 되돌림 | 이 저장소의 직접 만든 스킬(스스로 힌트를 가짐), 설정에서 켜지 않은 Codex·Claude 플러그인 자리 |
 | `bin/pack-prefix-sync` | Claude: 말머리 감싸개 + 원래 이름 `user-invocable-only`. Codex: `~/.codex/skills` 감싸개 + `config.toml` 자동 블록 | 다른 도구 |
 | `bin/antigravity-sync-skills` | 선반을 한 단계로 펼쳐 `~/.gemini/config/skills`에 링크, 팩은 말머리 감싸개, 목록 예산 넘는 것은 뺌 | Claude·Codex |
 | `bin/dsh-sync-skills` | `~/.dsh/skills`에 pstack 링크와 팩 말머리 감싸개 | 선반 자체(DSH가 직접 읽음) |
@@ -125,10 +126,10 @@ sequenceDiagram
 | 단계 | 하는 일 |
 |---|---|
 | 1 | python·git·bun과 설치된 도구 확인 |
-| 2 | 골라진 원본을 받는다. 이미 있으면 그대로 둔다 |
-| 3 | gstack 문서 생성, 브라우저 빌드(실패해도 계속), 실행 파일 자리(`gstack-runtime`) |
-| 4–6 | 링크를 건다. 다른 것이 이미 있으면 건너뛰고 알린다 |
-| 7 | 도구별 이름 맞추기 |
+| 2 | 골라진 원본을 받는다. 이미 있으면 그대로 둔다. `--update-sources`면 전에 고른 묶음까지 합쳐서, 고친 파일이 없는 원본을 고정 커밋으로 옮기고 고친 원본은 건너뛰어 알린다 |
+| 3 | gstack 문서 생성, 브라우저 빌드(실패해도 계속), 실행 파일 자리(`gstack-runtime`). gstack을 옮겼으면 의존성 설치·문서·빌드를 다시 한다(실패해도 계속). 원본을 하나라도 옮겼으면 이어서, 설치기가 만들었는데 깨진 링크를 지운다 |
+| 4–6 | 링크를 건다. 다른 것이 이미 있으면 건너뛰고 알린다. 5에서 힌트 목록이 없으면 둔다 |
+| 7 | 힌트 넣기(`skill-hints-sync`) → 도구별 이름 맞추기. 감싸개가 원본의 힌트를 복사하므로 이 순서다. `--update-sources`로 옮길 원본이 있으면 2 앞에서 힌트를 빼고 여기서 다시 넣는다 |
 | 8–9 | `--with`로 골랐을 때만 |
 
 ## 5. 데이터 관계: 상태 파일
@@ -137,14 +138,14 @@ sequenceDiagram
 
 | 칸 | 내용 | 제거할 때 |
 |---|---|---|
-| `created[]` | `{kind: link·dir·clone, path, …}` 만든 차례대로 | 거꾸로 지운다. 폴더는 비었을 때만, 원본은 `--purge-sources`이고 고친 것이 없을 때만 |
+| `created[]` | `{kind: link·dir·clone·file, path, …}` 만든 차례대로. `file`은 복사한 힌트 목록과 `sha256` | 거꾸로 지운다. 폴더는 비었을 때만, 원본은 `--purge-sources`이고 고친 것이 없을 때만, 파일은 해시가 같을 때만. 그 전에 `skill-hints-sync --remove`로 원본의 힌트를 뺀다 |
 | `claude_overrides_before` | 설치 전 Claude `skillOverrides` | 이 패키지가 다룬 칸만 이 값으로 되돌린다 |
 | `claude_settings_existed` | 설치 전에 `settings.json`이 있었나 | 없었고 지금 비었으면 파일을 지운다 |
 | `preexisting_links` | 설치 전 도구 폴더에 있던 링크 이름 | 이 이름은 지우지 않는다 |
 | `dsh_plugins[]` | 설치한 DSH 플러그인 | 프로필 `bundles`에서 빼고 `pnpm remove` |
 | `templates[]` | `{path, sha256}` | 해시가 같을 때만 지운다 |
 | `agents_existed` | 설치 전에 `~/.agents`가 있었나 | 없었으면 비었을 때 지운다 |
-| `groups[]`, `repo` | 고른 묶음, 설치한 저장소 위치 | 점검이 쓴다 |
+| `groups[]`, `repo` | 고른 묶음, 설치한 저장소 위치 | 점검이 쓴다. `groups[]`는 `--update-sources`도 쓴다 |
 
 ## 6. 지킬 경계
 
@@ -152,6 +153,7 @@ sequenceDiagram
 - 동기화 도구는 MARK 주석이 있는 감싸개와 `managed_roots()` 안을 가리키는 링크만 고치거나 지운다. 사용자가 직접 만든 스킬·링크는 건드리지 않는다.
 - 기존 사용자 파일은 덮어쓰지 않는다. 지침 틀은 대상이 없을 때만 복사한다.
 - 외부 원본 내용은 이 저장소에 싣지 않는다. 감싸개는 원본 경로만 가리킨다.
+- 받아 둔 원본은 `--apply --update-sources`일 때만 옮긴다. 고친 파일이 있는 원본(`.DS_Store`만 있는 경우는 제외)은 옮기지 않는다.
 - 비밀값을 읽거나 쓰지 않는다. DSH의 Brave 키는 사용자가 넣는다.
 
 ## 7. 고치는 때

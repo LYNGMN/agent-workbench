@@ -11,7 +11,8 @@
 | 구성 | 하는 일 |
 |---|---|
 | 설치·점검·제거 (`install.sh`, `doctor.sh`, `uninstall.sh`) | 외부 스킬 받기, 연결, 도구별 이름 맞추기, 상태 점검, 되돌리기 |
-| 동기화 도구 5개 (`bin/`) | `pack-prefix-sync`(Claude·Codex), `antigravity-sync-skills`, `dsh-sync-skills`, `gstack-sync-links`, `skill-inventory`(도구별 스킬 목록 HTML) |
+| 동기화 도구 6개 (`bin/`) | `skill-hints-sync`(한국어 입력 힌트), `pack-prefix-sync`(Claude·Codex), `antigravity-sync-skills`, `dsh-sync-skills`, `gstack-sync-links`, `skill-inventory`(도구별 스킬 목록 HTML) |
+| 스킬 입력 힌트 (`config/skill-hints.json`) | 외부 스킬 163개에 명령 뒤에 칠 것을 한국어로 보여 주는 `argument-hint`와 Codex 목록 설명. 설치하면 `~/.agents/skill-hints.json`으로 둡니다(이미 있으면 그대로) |
 | 직접 만든 스킬 18개 (`skills/`) | UI 검수(`ui-visual-qa` 등), 접근성(`wcag22-vibe-coding`), 한국어 글쓰기, Cloudflare 운영·비용 점검, 스킬 고르기(`skill-router`) 등. 목록은 [manifest/own-skills.json](manifest/own-skills.json) |
 | DeepSeek Harness 플러그인 3개 (`dsh-plugins/`, 선택) | `skill-hints`(입력창 힌트), `agy-commands`(Antigravity식 `/agy` 명령), `brave-search`(Brave 검색, 자기 API 키 필요) |
 | 지침 틀 (`templates/`, 선택) | 전역 `CLAUDE.md`와 `AGENTS.md` 시작용 틀(한국어로 답하기, 작게 고치기, 스킬 하나만 고르기 등) |
@@ -96,16 +97,22 @@ echo 'export PATH="$HOME/.agents/bin:$PATH"' >> ~/.zshrc
 ## 업데이트
 
 ```bash
-cd ~/agent-workbench && git pull && ./install.sh --apply
+cd ~/agent-workbench && git pull && ./install.sh --apply --update-sources
 ```
 
-이미 받아 둔 외부 원본은 그대로 둡니다. `./doctor.sh`가 어떤 원본을 "시험한 커밋과 다름"으로 보이면, 그 원본 폴더를 지우고 설치를 다시 돌려 시험한 커밋으로 받습니다(원본을 직접 고쳤다면 먼저 따로 보관하세요).
+받아 둔 외부 원본까지 이 저장소가 시험한 커밋으로 옮깁니다. `--apply`를 빼면 무엇을 옮길지 보여 주기만 합니다. `--update-sources`를 빼면 받아 둔 원본은 그대로 둡니다. 이때 `./doctor.sh`는 그 원본을 "시험한 커밋과 다름"으로 보여 줍니다.
+
+- 전에 `--with`로 고른 묶음의 원본도 함께 옮깁니다. `--with`를 다시 적지 않아도 됩니다.
+- 받은 뒤 파일을 고친 원본은 건너뛰고 어떤 원본인지 알려 줍니다(`.DS_Store`는 고친 것으로 치지 않습니다). 고친 내용을 따로 보관하고 되돌린 뒤 다시 돌리면 옮겨집니다.
+- 옮긴 원본에서 사라진 스킬은 연결도 함께 지웁니다.
+- gstack을 옮기면 스킬 문서와 브라우저 실행 파일을 다시 만듭니다. 빌드는 몇 분 걸리며, 건너뛰려면 `--no-gstack-build`를 붙입니다. 실패해도 나머지는 계속 진행하고 끝에 알려 줍니다.
+
+스킬을 직접 더하거나 지웠으면 동기화 도구를 다시 돌립니다. 입력 힌트(`~/.agents/skill-hints.json`)를 고쳤으면 `skill-hints-sync`부터 돌립니다. 감싸개가 원본의 힌트를 복사하기 때문입니다.
 
 ```bash
-rm -rf ~/.agents/sources/<만든 곳>/<이름> && ./install.sh --apply
+~/.agents/bin/skill-hints-sync --apply
 ```
 
-스킬을 직접 더하거나 지웠으면 동기화 도구를 다시 돌립니다.
 
 ```bash
 ~/.agents/bin/pack-prefix-sync --apply
@@ -133,7 +140,7 @@ rm -rf ~/.agents/sources/<만든 곳>/<이름> && ./install.sh --apply
 ./uninstall.sh --apply
 ```
 
-설치 기록(`~/.agents/.workbench/state.json`)에 적힌 것과 동기화 도구가 표시를 남긴 파일만 지웁니다. Claude `skillOverrides`, Codex `config.toml`, DeepSeek Harness 프로필은 설치 전 값으로 돌려놓습니다. 설치 뒤 고친 지침 파일은 남깁니다.
+먼저 외부 원본에 넣은 입력 힌트를 빼서 받은 그대로 돌려놓습니다. 그다음 설치 기록(`~/.agents/.workbench/state.json`)에 적힌 것과 동기화 도구가 표시를 남긴 파일만 지웁니다. Claude `skillOverrides`, Codex `config.toml`, DeepSeek Harness 프로필은 설치 전 값으로 돌려놓습니다. 설치 뒤 고친 지침 파일은 남깁니다.
 
 ## 어디에 무엇이 생기나
 
@@ -174,7 +181,7 @@ flowchart LR
 test/install-test.sh
 ```
 
-빈 임시 HOME 두 개(도구 네 개가 다 있는 맥, Claude만 있는 맥)에 미리보기 → 설치 → 다시 돌려도 바꿀 것 없음 → 점검 → 제거 뒤 설치 전과 같음을 확인합니다. 실제 HOME은 건드리지 않습니다.
+빈 임시 HOME 세 개를 씁니다. 도구 네 개가 다 있는 맥과 Claude만 있는 맥에 미리보기 → 설치 → 다시 돌려도 바꿀 것 없음 → 점검 → 제거 뒤 설치 전과 같음을 확인합니다. 세 번째 HOME에서는 원본을 다른 커밋으로 옮겨 둔 뒤 `--update-sources`로 돌아오는지, 고친 원본은 건너뛰는지 확인합니다. 실제 HOME은 건드리지 않습니다.
 
 ## 라이선스와 출처
 
