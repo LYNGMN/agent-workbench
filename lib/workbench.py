@@ -37,7 +37,10 @@ DSH_PROFILE = os.path.join(DSH, 'profiles', 'desktop')
 DSH_RUNTIME = os.path.join(DSH, 'dsh-runtimes', 'dsh-primary-runtime', 'dependencies')
 GSTACK = os.path.join(SOURCES, 'garrytan', 'gstack')
 GSTACK_RUNTIME = os.path.join(SOURCES, 'garrytan', 'gstack-runtime')
-TOOLS = ['pack-prefix-sync', 'antigravity-sync-skills', 'dsh-sync-skills', 'gstack-sync-links', 'skill-inventory']
+TOOLS = ['skill-hints-sync', 'pack-prefix-sync', 'antigravity-sync-skills', 'dsh-sync-skills', 'gstack-sync-links', 'skill-inventory']
+HINTS_FILE = os.path.join(AGENTS, 'skill-hints.json')
+HINTS_STATE = wc.hints_state()
+HINTS_TOOL = [sys.executable, os.path.join(REPO, 'bin', 'skill-hints-sync')]
 DSH_PLUGINS = ['skill-hints', 'agy-commands', 'brave-search']
 OPTIONAL = ['extra', 'catalog', 'dsh-plugins', 'templates']
 TARGET_DIRS = {
@@ -116,6 +119,23 @@ def source_changes(dest):
     """받은 뒤 고친 파일 목록. macOS가 저절로 만드는 .DS_Store는 뺀다."""
     out = git(['--no-optional-locks', 'status', '--porcelain'], cwd=dest, check=False).stdout
     return [line for line in out.splitlines() if not line.endswith('.DS_Store')]
+
+
+def hinted_files():
+    """skill-hints-sync가 힌트를 넣은 파일(실제 경로)."""
+    return set(load_json(HINTS_STATE, {}))
+
+
+def not_hints(dest, changes):
+    """고친 파일 목록에서 skill-hints-sync가 넣은 힌트만 바뀐 파일을 뺀다(미리보기용: 적용 때는 먼저 힌트를 뺀다)."""
+    hinted, real = hinted_files(), os.path.realpath(dest)
+    out = []
+    for line in changes:
+        p = os.path.join(real, line[3:].strip('"').rstrip('/'))
+        if p in hinted or any(h.startswith(p + os.sep) for h in hinted):
+            continue
+        out.append(line)
+    return out
 
 
 def fetch_commit(dest, url, commit):
@@ -244,10 +264,18 @@ def check_prereq(groups):
     return ok
 
 
+def is_repo(dest):
+    return os.path.isdir(os.path.join(dest, '.git')) or os.path.isfile(os.path.join(dest, '.git'))
+
+
+def head_of(dest):
+    return git(['rev-parse', 'HEAD'], cwd=dest, check=False).stdout.strip()
+
+
 def move_source(plan, source, head):
     """받아 둔 원본을 고정 커밋으로 옮긴다. 옮겼으면(미리보기는 옮길 예정이면) True."""
     dest = src_dir(source)
-    changes = source_changes(dest)
+    changes = source_changes(dest) if plan.apply else not_hints(dest, source_changes(dest))
     if changes:
         plan.problem(f'건너뜀 {source["repo"]}: 받은 뒤 고친 파일 {len(changes)}개가 있어 옮기지 않았습니다'
                      f'(예: {changes[0][3:]}). 고친 내용을 따로 보관하고 되돌린 뒤 다시 돌리세요')
@@ -268,10 +296,14 @@ def clone_sources(plan, groups, update=False):
     """원본을 받고, update면 받아 둔 원본도 고정 커밋으로 옮긴다. 옮긴 원본 id를 돌려준다."""
     say('[2/9] 외부 스킬 원본 받기(복사본을 싣지 않고 원본 저장소에서 받음)')
     moved = set()
+    if update and plan.apply and os.path.isfile(HINTS_STATE) and any(
+            is_repo(src_dir(s)) and head_of(src_dir(s)) != s['commit'] for s in selected_sources(groups)):
+        # 힌트는 원본 SKILL.md를 고치므로, 빼 두지 않으면 고친 원본으로 보이고 checkout도 막힌다. 옮긴 뒤 [7/9]에서 다시 넣는다.
+        plan.run('스킬 입력 힌트 잠시 빼기(skill-hints-sync --remove, 옮긴 뒤 다시 넣음)', HINTS_TOOL + ['--remove'], allow_fail=True)
     for source in selected_sources(groups):
         dest = src_dir(source)
-        if os.path.isdir(os.path.join(dest, '.git')) or os.path.isfile(os.path.join(dest, '.git')):
-            head = git(['rev-parse', 'HEAD'], cwd=dest, check=False).stdout.strip()
+        if is_repo(dest):
+            head = head_of(dest)
             if head == source['commit']:
                 continue
             if update:
@@ -412,12 +444,38 @@ def link_shelf(plan, groups):
 
 
 def link_tools(plan):
-    say('[5/9] 동기화 도구를 ~/.agents/bin에 잇기')
+    say('[5/9] 동기화 도구를 ~/.agents/bin에 잇기, 스킬 입력 힌트 목록 두기')
     plan.mkdir(BIN)
     for tool in TOOLS:
         plan.link(os.path.join(BIN, tool), os.path.join(REPO, 'bin', tool))
+    copy_hints_list(plan)
     if BIN not in os.environ.get('PATH', '').split(os.pathsep):
         say('  · 짧은 이름으로 부르려면 ~/.zshrc에 한 줄 추가: export PATH="$HOME/.agents/bin:$PATH"')
+
+
+def copy_hints_list(plan):
+    """~/.agents/skill-hints.json이 없으면 둔다. 이 설치기가 둔 뒤 고치지 않은 목록만 새 판으로 바꾼다."""
+    src = os.path.join(REPO, 'config', 'skill-hints.json')
+    rec = next((i for i in plan.state['created'] if i['kind'] == 'file' and i['path'] == HINTS_FILE), None)
+    verb = '두기'
+    if os.path.exists(HINTS_FILE):
+        current = sha256(HINTS_FILE)
+        if not rec or current != rec['sha256']:
+            say(f'  · 그대로 둠 {short(HINTS_FILE)}: 이미 있는 힌트 목록은 덮어쓰지 않습니다')
+            return
+        if current == sha256(src):
+            return
+        verb = '새 판으로 바꾸기'
+    plan.step(f'스킬 입력 힌트 목록 {verb} {short(HINTS_FILE)}')
+    if not plan.apply:
+        return
+    plan.mkdir_quiet(AGENTS)
+    shutil.copyfile(src, HINTS_FILE)
+    if rec:
+        rec['sha256'] = sha256(HINTS_FILE)
+        plan.save()
+    else:
+        plan.record({'kind': 'file', 'path': HINTS_FILE, 'sha256': sha256(HINTS_FILE)})
 
 
 def link_claude(plan, entries):
@@ -467,6 +525,8 @@ def sync_tools(plan):
     calls = []
     if os.path.isdir(os.path.join(GSTACK, '.agents', 'skills')):
         calls.append(('gstack 연결', [os.path.join(REPO, 'bin', 'gstack-sync-links')] + ([] if plan.apply else ['--check'])))
+    # 감싸개가 원본의 힌트를 복사하므로 힌트를 먼저 넣는다.
+    calls.append(('스킬 입력 힌트', HINTS_TOOL + (['--apply'] if plan.apply else [])))
     if present['claude'] or present['codex']:
         calls.append(('Claude·Codex 말머리', [sys.executable, os.path.join(REPO, 'bin', 'pack-prefix-sync')] + (['--apply'] if plan.apply else [])))
     if present['antigravity']:
@@ -650,7 +710,8 @@ def doctor(args):
             dirnames[:] = [d for d in dirnames if not os.path.islink(os.path.join(dirpath, d))]
     check('깨진 링크', not broken, ', '.join(broken[:5]) + (f' 외 {len(broken) - 5}개' if len(broken) > 5 else ''))
     present = tools_present()
-    tool_checks = [('gstack 연결', [os.path.join(REPO, 'bin', 'gstack-sync-links'), '--check'], os.path.isdir(os.path.join(GSTACK, '.agents', 'skills'))),
+    tool_checks = [('스킬 입력 힌트', HINTS_TOOL + ['--check'], True),
+                   ('gstack 연결', [os.path.join(REPO, 'bin', 'gstack-sync-links'), '--check'], os.path.isdir(os.path.join(GSTACK, '.agents', 'skills'))),
                    ('Claude·Codex 말머리', [sys.executable, os.path.join(REPO, 'bin', 'pack-prefix-sync')], present['claude'] or present['codex']),
                    ('Antigravity 연결', [sys.executable, os.path.join(REPO, 'bin', 'antigravity-sync-skills')], present['antigravity']),
                    ('DeepSeek Harness 연결', [sys.executable, os.path.join(REPO, 'bin', 'dsh-sync-skills')], present['dsh'])]
@@ -710,6 +771,14 @@ def uninstall(args):
         say(f'  - {msg}')
         if apply:
             fn()
+
+    # 0) 스킬 입력 힌트를 원본에서 뺀다(원본이 받은 그대로여야 --purge-sources가 지운다)
+    if os.path.isfile(HINTS_STATE):
+        def remove_hints():
+            r = subprocess.run(HINTS_TOOL + ['--remove'], capture_output=True, text=True)
+            if r.returncode != 0:
+                say('  ! 힌트를 빼지 못했습니다: ' + ' / '.join((r.stdout + r.stderr).strip().splitlines()[-3:]))
+        act('스킬 입력 힌트를 원본에서 빼기(skill-hints-sync --remove)', remove_hints)
 
     # 1) DeepSeek Harness 플러그인
     pkg_path = os.path.join(DSH_PROFILE, 'package.json')
@@ -820,6 +889,11 @@ def uninstall(args):
                         say(f'  · 그대로 둠 {short(p)}: 안에 다른 파일이 있음')
                 if apply or not os.listdir(p):
                     act(f'빈 폴더 지우기 {short(p)}', rmdir_if_empty)
+        elif item['kind'] == 'file':
+            if os.path.isfile(p) and sha256(p) == item['sha256']:
+                act(f'파일 지우기 {short(p)}', lambda p=p: os.unlink(p))
+            elif os.path.isfile(p):
+                say(f'  · 그대로 둠 {short(p)}: 설치 뒤 고친 파일입니다')
         elif item['kind'] == 'clone':
             if not purge:
                 continue

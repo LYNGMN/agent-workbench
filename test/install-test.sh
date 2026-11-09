@@ -78,12 +78,16 @@ check "Antigravity: superpowers-brainstorming" "[ -e '$H/.gemini/config/skills/s
 check "DeepSeek Harness: gstack-browse.md" "[ -f '$H/.dsh/skills/gstack-browse.md' ]"
 check "DeepSeek Harness: pstack 스킬" "ls '$H/.dsh/skills' | grep -q '^pstack-'"
 check "도구 링크 ~/.agents/bin/pack-prefix-sync" "[ -x '$H/.agents/bin/pack-prefix-sync' ]"
+check "스킬 입력 힌트 목록 ~/.agents/skill-hints.json" "cmp -s '$H/.agents/skill-hints.json' '$REPO/config/skill-hints.json'"
+check "힌트: 외부 원본 superpowers의 SKILL.md에 argument-hint" "grep -q '^argument-hint: \"\[만들 기능' '$H/.agents/sources/obra/superpowers/skills/brainstorming/SKILL.md'"
+check "힌트: Claude 감싸개 /superpowers-brainstorming에도 복사됨" "grep -q '^argument-hint:' '$H/.claude/skills/superpowers-brainstorming/SKILL.md'"
+check "힌트: 직접 만든 스킬(이 저장소)은 고치지 않음" "[ -z \"\$(git -C '$REPO' status --porcelain -- skills)\" ]"
 if [ -d "$H/.dsh/dsh-runtimes" ]; then
   check "DeepSeek Harness 플러그인 3개 bundles" "python3 -c \"import json,sys;b=json.load(open('$H/.dsh/profiles/desktop/package.json'))['dsh']['profile']['bundles'];sys.exit(0 if len([x for x in b if x.startswith('@local/')])==3 else 1)\""
 fi
 
 echo "4) 다시 돌리면 바꿀 것이 없다"
-for tool in "gstack-sync-links --check" pack-prefix-sync antigravity-sync-skills dsh-sync-skills; do
+for tool in "gstack-sync-links --check" "skill-hints-sync --check" pack-prefix-sync antigravity-sync-skills dsh-sync-skills; do
   out="$($H/.agents/bin/$tool 2>&1)"; rc=$?
   check "$tool: 종료 코드 0, $(echo "$out" | tail -1)" "[ $rc -eq 0 ]"
 done
@@ -103,6 +107,7 @@ check "DSH my-link" "[ -L '$H/.dsh/skills/my-link' ]"
 echo "7) 제거(--apply --purge-sources) 뒤 설치 전과 같다"
 ./uninstall.sh --apply --purge-sources > "$T/uninstall.log" 2>&1; rc=$?
 check "제거 종료 코드 0" "[ $rc -eq 0 ]"
+check "제거가 힌트를 먼저 빼서 받은 원본이 원래대로(고친 원본으로 남지 않음)" "grep -q '스킬 입력 힌트를 원본에서 빼기' '$T/uninstall.log' && ! grep -q '고친 파일이 있음' '$T/uninstall.log'"
 snapshot > "$T/tree.after"
 if cmp -s "$T/tree.before" "$T/tree.after"; then pass "파일 목록이 설치 전과 같음"; else fail "파일 목록이 다름:"; diff "$T/tree.before" "$T/tree.after" | head -20 | sed 's/^/    /'; fi
 check "Claude 설정이 설치 전과 같음" "python3 -c \"import json,sys;sys.exit(0 if json.load(open('$H/.claude/settings.json'))==json.load(open('$T/settings.before')) else 1)\""
@@ -155,6 +160,7 @@ tgit -C "$TS" commit -q --allow-empty -m old; touch "$TS/.DS_Store"
 tgit -C "$KP" commit -q --allow-empty -m old
 KP_FILE="$(git -C "$KP" ls-files | head -1)"; echo 'workbench-test 고침' >> "$KP/$KP_FILE"
 SP_OLD="$(head_of "$SP")"; KP_OLD="$(head_of "$KP")"
+check "(준비) 힌트가 들어간 원본" "grep -q '^argument-hint:' '$SP/skills/brainstorming/SKILL.md'"
 check "(준비) owasp 고정 커밋이 저장소에 없음" "! git -C '$OW' cat-file -e '$(pin owasp)^{commit}' 2>/dev/null"
 
 ./install.sh --apply --with extra --no-gstack-build > "$T/noupdate.log" 2>&1
@@ -182,6 +188,7 @@ EOF
 chmod +x "$T/fakebin/bun"
 PATH="$T/fakebin:$PATH" ./install.sh --apply --update-sources > "$T/update3.log" 2>&1; rc=$?
 check "고친 원본이 남아 종료 코드 1" "[ $rc -eq 1 ]"
+check "힌트를 빼고 옮긴 뒤 다시 넣음" "grep -q '스킬 입력 힌트 잠시 빼기' '$T/update3.log' && grep -q '^argument-hint:' '$SP/skills/brainstorming/SKILL.md'"
 check "superpowers가 고정 커밋으로 돌아옴" "at '$SP' '$(pin superpowers)'"
 check "gstack이 고정 커밋으로 돌아옴" "at '$GS' '$(pin gstack)'"
 check "--with 없이도 고른 묶음을 옮기고, 없던 커밋을 받아 옴(owasp)" "at '$OW' '$(pin owasp)'"
@@ -202,6 +209,7 @@ grep '^✗' "$T/doctor3.log" | sed 's/^/    /'
 check "doctor: 브라우저 빌드 말고는 문제 없음" "[ \$(grep '^✗' '$T/doctor3.log' | grep -v 'gstack 브라우저 실행 파일' | wc -l) -eq 0 ]"
 check "doctor: 다른 커밋 안내가 사라짐" "! grep -q '시험한 커밋' '$T/doctor3.log'"
 ./uninstall.sh --apply --purge-sources > "$T/uninstall3.log" 2>&1
+check "옮긴 뒤 제거해도 힌트를 빼서 원본이 원래대로" "! grep -q '고친 파일이 있음' '$T/uninstall3.log'"
 snapshot > "$T/tree3.after"
 if cmp -s "$T/tree3.before" "$T/tree3.after"; then
   pass "옮긴 뒤에도 제거하면 설치 전과 같음"
